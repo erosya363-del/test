@@ -3,538 +3,887 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#f1eee5">
-  <title>YARM — Quantum Editorial</title>
-  <meta name="description" content="YARM: данные, дашборды, Excel и обучение команд. Не декорируем хаос — превращаем его в решение.">
+  <meta name="theme-color" content="#101219">
+  <meta name="description" content="Интерактивный практикум Excel: от сырых данных к понятному отчёту за 60 минут.">
+  <title>YARM — Практикум Excel</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Unbounded:wght@500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
-      --paper: #f1eee5;
-      --ink: #111115;
-      --signal: #334cff;
-      --acid: #ddff00;
-      --coral: #ff5f40;
+      --paper: #101219;
+      --ink: #f7f3ea;
+      --signal: #caff36;
+      --muted: color-mix(in srgb, var(--ink) 62%, transparent);
+      --line: color-mix(in srgb, var(--ink) 16%, transparent);
+      --ease-editorial: cubic-bezier(.16, 1, .3, 1);
+      --duration-fast: .2s;
+      --duration-hover: .45s;
+      --duration-reveal: .9s;
+      --duration-glyph: 1.05s;
       --progress: 0;
       --case-x: 0vw;
-      --mx: 50vw;
-      --my: 50vh;
     }
+
     * { box-sizing: border-box; }
-    html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+    html { scroll-behavior: smooth; }
     body {
       margin: 0;
       overflow-x: hidden;
-      color: var(--ink);
       background: var(--paper);
+      color: var(--ink);
       font-family: Manrope, Arial, sans-serif;
-      cursor: none;
-      transition: background-color .65s cubic-bezier(.16,1,.3,1), color .65s cubic-bezier(.16,1,.3,1);
+      transition: background-color .65s var(--ease-editorial), color .65s var(--ease-editorial);
     }
     body::before {
       content: "";
       position: fixed;
+      z-index: 30;
       inset: 0;
-      z-index: 50;
       pointer-events: none;
-      opacity: .15;
-      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.34'/%3E%3C/svg%3E");
-      mix-blend-mode: multiply;
+      opacity: .045;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 160 160' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.9'/%3E%3C/svg%3E");
     }
-    ::selection { color: #111; background: var(--acid); }
+    button, input, select, textarea { font: inherit; }
     a { color: inherit; text-decoration: none; }
-    img, svg, video, canvas { max-width: 100%; height: auto; }
-    button, input, textarea { font: inherit; }
-    a, button, input, textarea { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
-    button { color: inherit; }
+    ::selection { background: var(--signal); color: #101219; }
 
-    .cursor {
+    .progress {
       position: fixed;
-      left: 0; top: 0;
       z-index: 80;
-      width: 26px; height: 26px;
-      border-radius: 50%;
-      background: #fff;
-      pointer-events: none;
-      transform: translate(-50%,-50%);
-      mix-blend-mode: difference;
-      transition: width .2s, height .2s;
+      top: 0;
+      left: 0;
+      width: calc(var(--progress) * 1%);
+      height: 4px;
+      background: var(--signal);
+      box-shadow: 0 0 22px color-mix(in srgb, var(--signal) 80%, transparent);
     }
-    body.link-hover .cursor { width: 64px; height: 64px; }
-    .progress { position: fixed; left: 0; top: 0; z-index: 70; width: calc(var(--progress)*1%); height: 4px; background: var(--signal); }
     .backword {
       position: fixed;
-      left: 50%; top: 50%;
       z-index: -1;
+      top: 53%;
+      left: 50%;
+      max-width: 100vw;
+      overflow: hidden;
+      transform: translate(-50%, -50%) rotate(-7deg);
       color: color-mix(in srgb, var(--ink) 4%, transparent);
-      font: 800 clamp(150px,28vw,550px)/.7 Manrope,sans-serif;
-      letter-spacing: -.1em;
-      text-transform: uppercase;
+      font: 700 clamp(120px, 28vw, 540px)/.7 Unbounded, sans-serif;
+      letter-spacing: -.12em;
       white-space: nowrap;
-      transform: translate(-50%,-50%) rotate(-7deg);
       pointer-events: none;
-      transition: opacity .3s;
+      transition: opacity .17s ease;
     }
-
-    .header {
+    .cursor {
       position: fixed;
-      left: 18px; right: 18px; top: 18px;
+      z-index: 90;
+      top: 0;
+      left: 0;
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: #fff;
+      mix-blend-mode: difference;
+      pointer-events: none;
+      transform: translate(-50%, -50%);
+      transition: width .2s, height .2s;
+    }
+    body.link-hover .cursor { width: 62px; height: 62px; }
+
+    .site-header {
+      position: fixed;
       z-index: 60;
+      top: 0;
+      left: 0;
+      width: 100%;
       display: grid;
       grid-template-columns: 1fr auto 1fr;
       align-items: center;
-      min-height: 52px;
-      padding: 0 17px;
+      padding: 18px clamp(20px, 4vw, 64px);
+      color: var(--ink);
+      mix-blend-mode: normal;
+    }
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      width: max-content;
+      font: 600 11px/1 Unbounded, sans-serif;
+      letter-spacing: .06em;
+    }
+    .brand-mark {
+      display: grid;
+      place-items: center;
+      width: 31px;
+      height: 31px;
       border: 1px solid currentColor;
-      background: color-mix(in srgb, var(--paper) 82%, transparent);
+      border-radius: 50%;
+      font-size: 11px;
+    }
+    .nav { display: flex; align-items: center; gap: 20px; font-size: 12px; font-weight: 700; }
+    .nav a { opacity: .68; transition: opacity .2s; }
+    .nav a:hover { opacity: 1; }
+    .header-cta {
+      justify-self: end;
+      padding: 11px 15px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--paper) 35%, transparent);
       backdrop-filter: blur(12px);
-      transition: background-color .65s, color .65s;
+      font-size: 11px;
+      font-weight: 800;
+      transition: background-color .25s, color .25s, transform .25s;
     }
-    .logo { font-size: 22px; font-weight: 800; letter-spacing: -.07em; }
-    .header-center { justify-self: center; font: 500 10px/1 DM Mono,monospace; letter-spacing: .08em; text-transform: uppercase; }
-    .header-link { justify-self: end; display: inline-flex; align-items: center; gap: 9px; font: 500 10px/1 DM Mono,monospace; text-transform: uppercase; }
-    .header-link::after { content: "↗"; display: grid; place-items: center; width: 25px; height: 25px; border-radius: 50%; background: var(--signal); color: var(--paper); }
+    .header-cta:hover { transform: translateY(-2px); background: var(--signal); color: #101219; }
 
-    .section { position: relative; min-height: 100vh; min-height: 100svh; padding: 112px 4vw 72px; isolation: isolate; }
-    .section-inner { width: min(1560px,100%); margin: auto; }
-    .kicker { display: flex; align-items: center; gap: 14px; font: 500 11px/1.3 DM Mono,monospace; letter-spacing: .08em; text-transform: uppercase; }
-    .kicker::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--signal); }
-    .micro { font: 400 11px/1.55 DM Mono,monospace; text-transform: uppercase; letter-spacing: .05em; }
-    .reveal { opacity: 0; transform: translateY(32px); transition: opacity .75s ease, transform .9s cubic-bezier(.16,1,.3,1); }
-    .is-active .reveal, .reveal.seen { opacity: 1; transform: none; }
+    section { position: relative; }
+    .wrap { width: min(1240px, calc(100% - 48px)); margin: 0 auto; }
+    .eyebrow {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+    .eyebrow::before { content: ""; width: 26px; height: 1px; background: currentColor; }
+    .display {
+      margin: 0;
+      font: 600 clamp(42px, 8vw, 118px)/.94 Unbounded, sans-serif;
+      letter-spacing: -.075em;
+    }
+    .copy { font-size: clamp(16px, 1.5vw, 20px); line-height: 1.55; color: var(--muted); }
+    .copy strong { color: var(--ink); }
+    .section-kicker { margin-bottom: 28px; }
+    .rule { height: 1px; background: var(--line); }
 
+    .hero {
+      min-height: max(720px, 100svh);
+      display: flex;
+      align-items: flex-end;
+      padding: 120px 0 58px;
+    }
+    .hero-grid { display: grid; grid-template-columns: 1.35fr .65fr; gap: 40px; align-items: end; }
+    .hero-title { max-width: 850px; will-change: transform; transition: transform .18s ease-out; }
+    .hero-title .letters { display: block; }
+    .hero-sub {
+      max-width: 390px;
+      margin: 34px 0 0;
+      font-size: 17px;
+      line-height: 1.55;
+      color: var(--muted);
+    }
+    .hero-meta { display: grid; gap: 25px; justify-items: end; }
+    .hero-meta p { max-width: 205px; margin: 0; font-size: 12px; line-height: 1.55; color: var(--muted); }
+    .hero-stamp {
+      position: relative;
+      display: grid;
+      place-items: center;
+      width: 126px;
+      height: 126px;
+      border: 1px solid var(--ink);
+      border-radius: 50%;
+      animation: stampSpin 18s linear infinite;
+    }
+    .hero-stamp::before {
+      content: "ЭКСЕЛЬ · ПРАКТИКА · ДАННЫЕ · ";
+      position: absolute;
+      inset: 8px;
+      display: grid;
+      place-items: center;
+      border: 1px dashed var(--line);
+      border-radius: 50%;
+      font: 600 7px/1 Unbounded, sans-serif;
+      letter-spacing: .13em;
+      animation: stampSpin 18s linear infinite reverse;
+    }
+    .hero-stamp b { font: 600 28px/1 Unbounded, sans-serif; }
+    @keyframes stampSpin { to { transform: rotate(360deg); } }
+    .hero-bottom { display: flex; align-items: end; justify-content: space-between; gap: 30px; margin-top: 50px; }
+    .hero-bottom .scroll-note { font-size: 11px; color: var(--muted); letter-spacing: .05em; }
+    .hero-bottom .scroll-note::after { content: "↓"; display: inline-block; margin-left: 11px; color: var(--signal); animation: nudge 1.5s ease-in-out infinite; }
+    @keyframes nudge { 50% { transform: translateY(6px); } }
+    .hero-index { font: 600 clamp(60px, 9vw, 128px)/.7 Unbounded, sans-serif; color: color-mix(in srgb, var(--ink) 15%, transparent); letter-spacing: -.1em; }
+
+    .ticker { overflow: hidden; margin: 0; transform: rotate(-1.4deg) scale(1.02); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+    .ticker-track { display: flex; width: max-content; animation: ticker 24s linear infinite; }
+    .ticker-track span { padding: 14px 22px; font: 600 clamp(16px, 2vw, 25px)/1 Unbounded, sans-serif; letter-spacing: -.05em; white-space: nowrap; }
+    .ticker-track i { color: var(--signal); font-style: normal; }
+    @keyframes ticker { to { transform: translateX(-50%); } }
+
+    .why { padding: 150px 0; }
+    .why-head { display: grid; grid-template-columns: 1fr .75fr; gap: 80px; align-items: end; margin-bottom: 70px; }
+    .why-head .display { max-width: 720px; }
+    .benefits { display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid var(--line); }
+    .benefit {
+      min-height: 260px;
+      padding: 24px 24px 30px 0;
+      border-right: 1px solid var(--line);
+    }
+    .benefit:not(:first-child) { padding-left: 24px; }
+    .benefit:last-child { border-right: none; }
+    .benefit-number { display: block; margin-bottom: 58px; color: var(--signal); font: 600 13px/1 Unbounded, sans-serif; }
+    .benefit h3 { margin: 0 0 12px; font-size: 20px; letter-spacing: -.04em; }
+    .benefit p { max-width: 235px; margin: 0; color: var(--muted); font-size: 14px; line-height: 1.55; }
+
+    .proof { height: 340vh; }
+    .proof-stage { position: sticky; top: 0; height: 100svh; overflow: hidden; }
+    .proof-track { display: flex; width: 300vw; height: 100%; transform: translate3d(var(--case-x), 0, 0); will-change: transform; }
+    .proof-card { flex: 0 0 100vw; width: 100vw; min-height: 100%; display: flex; align-items: center; padding: 120px max(24px, calc((100vw - 1240px) / 2)); }
+    .proof-layout { display: grid; grid-template-columns: .8fr 1.2fr; gap: clamp(36px, 8vw, 130px); width: 100%; align-items: center; }
+    .proof-layout h2 { margin: 20px 0; font: 600 clamp(38px, 6vw, 90px)/.96 Unbounded, sans-serif; letter-spacing: -.075em; }
+    .proof-layout p { max-width: 375px; margin: 0; color: var(--muted); font-size: 16px; line-height: 1.6; }
+    .proof-no { color: var(--signal); font: 600 12px/1 Unbounded, sans-serif; }
+    .proof-dots { position: absolute; bottom: 42px; left: 50%; display: flex; gap: 9px; transform: translateX(-50%); }
+    .proof-dots i { width: 7px; height: 7px; border: 1px solid var(--ink); border-radius: 999px; transition: width .3s, background-color .3s; }
+    .proof-dots i.active { width: 32px; background: var(--signal); border-color: var(--signal); }
+
+    .excel-window {
+      overflow: hidden;
+      border: 1px solid color-mix(in srgb, var(--ink) 30%, transparent);
+      border-radius: 12px;
+      background: #f8faf4;
+      color: #172018;
+      box-shadow: 18px 22px 0 color-mix(in srgb, var(--ink) 15%, transparent);
+    }
+    .excel-top { display: flex; align-items: center; gap: 5px; height: 35px; padding: 0 13px; border-bottom: 1px solid #d8ddcf; background: #ecf0e6; }
+    .excel-top i { width: 7px; height: 7px; border-radius: 50%; background: #b6c0ae; }
+    .excel-title { margin-left: auto; color: #778174; font-size: 9px; font-weight: 800; letter-spacing: .06em; }
+    .sheet { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: clamp(8px, 1vw, 12px); }
+    .sheet th, .sheet td { position: relative; height: clamp(31px, 4vw, 48px); padding: 7px 8px; border: 1px solid #dce3d7; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .sheet th { background: #e2eadc; color: #445241; font-size: .85em; font-weight: 800; }
+    .sheet .selected { outline: 2px solid #43a047; outline-offset: -2px; background: #f6fff1; }
+    .sheet .bad { background: #fff1ef; color: #d64e3b; }
+    .sheet .muted-cell { color: #b7bdb2; }
+    .sheet .formula-cell { color: #267b35; font-weight: 800; }
+    .spread-preview { padding: 20px; background: #f8faf4; }
+    .spread-preview .sheet { box-shadow: 0 0 0 1px #dce3d7; }
+
+    .formula-window { overflow: hidden; border: 1px solid #f0eddf; border-radius: 12px; background: #14141b; color: #f4f0e4; box-shadow: 18px 22px 0 color-mix(in srgb, var(--ink) 15%, transparent); }
+    .formula-bar { display: flex; align-items: center; gap: 12px; padding: 12px 15px; border-bottom: 1px solid #32323e; color: #9ea0aa; font: 500 clamp(10px, 1.2vw, 15px)/1.4 ui-monospace, monospace; }
+    .formula-bar b { color: #caff36; font-weight: 600; }
+    .code-sheet { padding: clamp(18px, 3vw, 40px); }
+    .code-line { display: grid; grid-template-columns: 36px 1fr; gap: 14px; padding: 9px 0; font: 500 clamp(11px, 1.25vw, 16px)/1.45 ui-monospace, monospace; }
+    .code-line em { color: #5e6271; font-style: normal; text-align: right; }
+    .code-line .accent { color: #caff36; }
+    .code-line .string { color: #ff9d83; }
+    .result-chip { display: inline-flex; align-items: center; gap: 8px; margin-top: 30px; padding: 11px 14px; border: 1px solid #45583c; border-radius: 4px; background: #21311c; color: #d9ffca; font: 700 12px/1 Manrope, sans-serif; opacity: 0; transform: translateY(12px); transition: opacity .7s .9s, transform .7s .9s; }
+    .proof-card.is-shown .result-chip { opacity: 1; transform: none; }
+
+    .pivot-shell { padding: clamp(18px, 3vw, 38px); background: #f8faf4; }
+    .pivot-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; color: #687164; font-size: 11px; font-weight: 800; }
+    .pivot-head b { color: #1e3e2b; }
+    .pivot { display: grid; grid-template-columns: 1fr .66fr; gap: 18px; }
+    .pivot-table { overflow: hidden; border: 1px solid #d5decf; }
+    .pivot-row { display: grid; grid-template-columns: 1.3fr .7fr; min-height: 39px; padding: 0 12px; align-items: center; border-bottom: 1px solid #dfe5da; color: #495648; font-size: clamp(9px, 1vw, 12px); }
+    .pivot-row:first-child { background: #e2eadc; font-weight: 800; }
+    .pivot-row:last-child { border: none; background: #eff7e9; font-weight: 800; }
+    .mini-chart { display: grid; grid-template-columns: repeat(4, 1fr); align-items: end; gap: 8px; min-height: 210px; padding: 15px 10px 0; border: 1px solid #d5decf; background: #fff; }
+    .mini-bar { position: relative; min-height: 16px; background: #71ae65; transform-origin: bottom; transform: scaleY(0); transition: transform .85s var(--ease-editorial); }
+    .mini-bar:nth-child(2) { background: #c9e34d; }
+    .mini-bar:nth-child(3) { background: #459473; }
+    .mini-bar:nth-child(4) { background: #3e6f60; }
+    .mini-bar span { position: absolute; right: 50%; bottom: -22px; transform: translateX(50%); color: #697466; font-size: 9px; }
+    .proof-card.is-shown .mini-bar { transform: scaleY(1); }
+
+    .formula-story { padding: 145px 0 132px; }
+    .formula-intro { display: grid; grid-template-columns: .9fr 1.1fr; gap: 50px; align-items: end; margin-bottom: 58px; }
+    .formula-intro h2 { margin: 16px 0 0; }
+    .formula-caption { max-width: 475px; justify-self: end; }
+    .formula-stage { display: grid; grid-template-columns: .94fr 1.06fr; gap: 1px; border: 1px solid var(--line); background: var(--line); }
+    .formula-explain, .formula-demo { background: var(--paper); }
+    .formula-explain { padding: clamp(24px, 4vw, 58px); }
+    .formula-explain .formula-big { margin: 26px 0 24px; color: var(--signal); font: 600 clamp(20px, 3vw, 43px)/1.2 ui-monospace, monospace; letter-spacing: -.07em; }
+    .formula-points { display: grid; gap: 13px; margin-top: 36px; }
+    .formula-point { display: grid; grid-template-columns: 28px 1fr; gap: 12px; padding-bottom: 14px; border-bottom: 1px solid var(--line); font-size: 13px; line-height: 1.45; color: var(--muted); }
+    .formula-point b { color: var(--signal); font: 600 11px/1 Unbounded, sans-serif; }
+    .formula-demo { position: relative; min-height: 420px; padding: clamp(18px, 3vw, 42px); overflow: hidden; }
+    .cell-appear { opacity: 0; transform: translateY(18px); transition: opacity .55s var(--ease-editorial), transform .55s var(--ease-editorial), background-color .4s; }
+    .formula-stage.is-live .cell-appear { opacity: 1; transform: none; }
+    .formula-stage.is-live .cell-appear:nth-child(2) { transition-delay: .15s; }
+    .formula-stage.is-live .cell-appear:nth-child(3) { transition-delay: .3s; }
+    .formula-stage.is-live .cell-appear:nth-child(4) { transition-delay: .45s; }
+    .formula-stage.is-live .cell-appear:nth-child(5) { transition-delay: .6s; }
+    .formula-stage.is-live .cell-appear:nth-child(6) { transition-delay: .75s; }
+    .formula-result { position: absolute; right: 8%; bottom: 10%; z-index: 1; padding: 15px 18px; border-radius: 8px; background: #caff36; color: #15210d; font: 700 clamp(16px, 2vw, 25px)/1 Manrope, sans-serif; opacity: 0; transform: translateY(14px) rotate(-2deg); transition: opacity .55s 1.15s, transform .55s 1.15s; }
+    .formula-stage.is-live .formula-result { opacity: 1; transform: none; }
+
+    .scenarios { padding: 135px 0; }
+    .scenario-heading { display: grid; grid-template-columns: 1fr .7fr; gap: 70px; margin-bottom: 54px; }
+    .scenario-heading h2 { margin: 16px 0 0; }
+    .scenario-tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); }
+    .scenario-tab { position: relative; min-height: 255px; overflow: hidden; padding: 24px; border: 0; background: var(--paper); color: var(--ink); text-align: left; cursor: pointer; }
+    .scenario-tab::before { content: ""; position: absolute; z-index: 0; inset: 0; background: var(--signal); transform: scaleY(0); transform-origin: bottom; transition: transform .45s var(--ease-editorial); }
+    .scenario-tab:hover::before, .scenario-tab[aria-selected="true"]::before { transform: scaleY(1); }
+    .scenario-tab > * { position: relative; z-index: 1; }
+    .scenario-tab:hover, .scenario-tab[aria-selected="true"] { color: #101219; }
+    .scenario-tab .tab-no { display: block; margin-bottom: 64px; font: 600 11px/1 Unbounded, sans-serif; }
+    .scenario-tab b { display: block; max-width: 190px; font-size: 21px; letter-spacing: -.045em; }
+    .scenario-stage { min-height: 380px; margin-top: 1px; border: 1px solid var(--line); padding: clamp(24px, 4vw, 55px); }
+    .scenario-panel { display: none; grid-template-columns: .8fr 1.2fr; gap: 50px; align-items: center; }
+    .scenario-panel.active { display: grid; animation: panelIn .55s var(--ease-editorial); }
+    @keyframes panelIn { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: none; } }
+    .scenario-panel h3 { margin: 14px 0 18px; font: 600 clamp(29px, 4vw, 52px)/1 Unbounded, sans-serif; letter-spacing: -.075em; }
+    .scenario-panel p { max-width: 360px; margin: 0; color: var(--muted); font-size: 15px; line-height: 1.6; }
+    .scenario-output { padding: 19px; border-radius: 10px; background: color-mix(in srgb, var(--ink) 5%, transparent); }
+    .scenario-output .metric { margin-top: 14px; font: 600 clamp(26px, 3.2vw, 46px)/1 Unbounded, sans-serif; letter-spacing: -.08em; }
+    .scenario-output small { color: var(--muted); font-size: 11px; }
+    .scenario-bars { display: flex; align-items: end; gap: 10px; height: 150px; margin-top: 25px; padding: 0 8px; border-bottom: 1px solid var(--line); }
+    .scenario-bars i { width: 18%; background: var(--signal); transform-origin: bottom; animation: barUp .8s var(--ease-editorial) both; }
+    .scenario-bars i:nth-child(2) { height: 55%; animation-delay: .09s; }
+    .scenario-bars i:nth-child(3) { height: 92%; animation-delay: .18s; }
+    .scenario-bars i:nth-child(4) { height: 70%; animation-delay: .27s; }
+    .scenario-bars i:nth-child(5) { height: 80%; animation-delay: .36s; }
+    @keyframes barUp { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+
+    .program { padding: 146px 0; }
+    .program-head { display: grid; grid-template-columns: 1fr .7fr; gap: 60px; align-items: end; margin-bottom: 64px; }
+    .program-head h2 { margin: 17px 0 0; }
+    .program-list { border-top: 1px solid var(--line); }
+    .module { position: relative; border-bottom: 1px solid var(--line); }
+    .module::before { content: ""; position: absolute; inset: 0; z-index: -1; background: color-mix(in srgb, var(--signal) 92%, white); transform: scaleX(0); transform-origin: right; transition: transform .55s var(--ease-editorial); }
+    .module:hover::before, .module[open]::before { transform: scaleX(1); transform-origin: left; }
+    .module:hover, .module[open] { color: #121419; }
+    .module summary { display: grid; grid-template-columns: 80px 1fr auto; gap: 30px; align-items: center; min-height: 112px; padding: 22px 0; cursor: pointer; list-style: none; }
+    .module summary::-webkit-details-marker { display: none; }
+    .module-no { color: var(--signal); font: 600 11px/1 Unbounded, sans-serif; }
+    .module:hover .module-no, .module[open] .module-no { color: #161b13; }
+    .module-title { font: 700 clamp(22px, 3vw, 40px)/1.05 Manrope, sans-serif; letter-spacing: -.065em; }
+    .module-plus { display: grid; place-items: center; width: 32px; height: 32px; border: 1px solid currentColor; border-radius: 50%; font-size: 21px; font-weight: 400; transition: transform .35s var(--ease-editorial); }
+    .module[open] .module-plus { transform: rotate(45deg); }
+    .module-content { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, .72fr); gap: 60px; padding: 0 72px 38px 110px; }
+    .module-content p { margin: 0; font-size: 16px; line-height: 1.6; }
+    .module-content ul { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; color: #2d3325; font-size: 13px; line-height: 1.45; }
+    .module-content li { display: grid; grid-template-columns: 15px 1fr; gap: 10px; }
+    .module-content li::before { content: "↗"; color: #4d7211; font-weight: 800; }
+
+    .skills { padding: 122px 0; }
+    .skills-grid { display: grid; grid-template-columns: 1.12fr .88fr; gap: 70px; align-items: start; }
+    .skills h2 { margin: 16px 0 22px; }
+    .skill-stack { border-top: 1px solid var(--line); }
+    .skill { display: grid; grid-template-columns: 42px 1fr; gap: 17px; padding: 19px 0; border-bottom: 1px solid var(--line); font-size: 16px; font-weight: 700; letter-spacing: -.035em; }
+    .skill b { color: var(--signal); font: 600 11px/1 Unbounded, sans-serif; padding-top: 4px; }
+    .keys-card { padding: 30px; border: 1px solid var(--line); border-radius: 10px; }
+    .keys-card h3 { margin: 0 0 25px; font: 600 25px/1.05 Unbounded, sans-serif; letter-spacing: -.06em; }
+    .key { display: grid; grid-template-columns: 1fr auto; gap: 18px; align-items: center; padding: 14px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+    .key:last-child { border: none; }
+    kbd { padding: 6px 9px; border: 1px solid var(--line); border-radius: 5px; background: color-mix(in srgb, var(--ink) 6%, transparent); color: var(--ink); font: 700 11px/1 ui-monospace, monospace; }
+
+    .faq { padding: 115px 0; }
+    .faq-layout { display: grid; grid-template-columns: .65fr 1.35fr; gap: 70px; align-items: start; }
+    .faq-list { border-top: 1px solid var(--line); }
+    .faq-item { border-bottom: 1px solid var(--line); }
+    .faq-item summary { display: flex; justify-content: space-between; gap: 30px; padding: 24px 0; cursor: pointer; list-style: none; font-size: 17px; font-weight: 800; letter-spacing: -.035em; }
+    .faq-item summary::-webkit-details-marker { display: none; }
+    .faq-item summary::after { content: "+"; color: var(--signal); font: 400 24px/1 Manrope, sans-serif; transition: transform .3s; }
+    .faq-item[open] summary::after { transform: rotate(45deg); }
+    .faq-item p { max-width: 680px; margin: -5px 0 24px; color: var(--muted); font-size: 14px; line-height: 1.6; }
+
+    .signup { padding: 130px 0 56px; }
+    .signup-grid { display: grid; grid-template-columns: .88fr 1.12fr; gap: clamp(35px, 8vw, 120px); align-items: start; }
+    .signup h2 { margin: 18px 0 22px; }
+    .signup .copy { max-width: 410px; }
+    .signup-form { display: grid; grid-template-columns: 1fr 1fr; gap: 17px; }
+    .field { position: relative; display: grid; gap: 7px; }
+    .field.full { grid-column: 1 / -1; }
+    .field label { color: var(--muted); font-size: 10px; font-weight: 800; letter-spacing: .11em; text-transform: uppercase; }
+    .field input, .field select, .field textarea { width: 100%; min-height: 49px; padding: 11px 0; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; outline: none; background: transparent; color: var(--ink); font-size: 15px; font-weight: 600; transition: border-color .25s, color .25s; }
+    .field select option { background: #151720; color: #fff; }
+    .field textarea { min-height: 76px; resize: vertical; }
+    .field input:focus, .field select:focus, .field textarea:focus { border-color: var(--signal); }
+    .form-bottom { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-top: 18px; }
+    .form-note { max-width: 245px; color: var(--muted); font-size: 11px; line-height: 1.45; }
+    .submit { position: relative; overflow: hidden; min-width: 222px; min-height: 54px; padding: 0 22px; border: 1px solid var(--signal); border-radius: 0; background: var(--signal); color: #101219; cursor: pointer; font-size: 12px; font-weight: 800; letter-spacing: .02em; transition: transform .25s, background-color .25s; }
+    .submit:hover { transform: translateY(-3px); background: #e4ff91; }
+    .submit:disabled { cursor: wait; opacity: .75; }
+    .form-status { grid-column: 1 / -1; min-height: 20px; margin: 2px 0 0; color: var(--signal); font-size: 12px; font-weight: 700; }
+    .site-footer { display: flex; justify-content: space-between; gap: 30px; padding: 24px clamp(24px, 4vw, 64px) calc(24px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); color: var(--muted); font-size: 11px; }
+    .site-footer b { color: var(--ink); }
+
+    .reveal { opacity: 0; transform: translateY(32px); transition: opacity .75s ease, transform .9s var(--ease-editorial); }
+    .reveal.seen { opacity: 1; transform: none; }
     .letters { display: block; }
-    .glyph {
-      display: inline-block;
-      opacity: 0;
-      filter: blur(var(--blur,8px));
-      transform: translate3d(var(--gx),var(--gy),0) rotate(var(--gr)) scale(var(--gs));
-      transform-origin: 50% 65%;
-      transition: transform 1.05s cubic-bezier(.16,1,.3,1), opacity .6s ease, filter .8s ease;
-      transition-delay: calc(var(--i)*25ms + 120ms);
-    }
+    .glyph { display: inline-block; opacity: 0; filter: blur(var(--blur, 8px)); transform: translate3d(var(--gx), var(--gy), 0) rotate(var(--gr)) scale(var(--gs)); transform-origin: 50% 65%; transition: transform 1.05s var(--ease-editorial), opacity .6s ease, filter .8s ease; transition-delay: calc(var(--i) * 25ms + 120ms); }
     .glyph.space { width: .25em; }
     .is-active .glyph { opacity: 1; filter: blur(0); transform: none; }
 
-    .hero { min-height: 105vh; min-height: 105svh; display: grid; align-items: end; overflow: hidden; }
-    .hero-grid { display: grid; grid-template-columns: 1fr 280px; gap: 4vw; align-items: end; }
-    .hero-title { margin: 0; font-size: clamp(65px,12.5vw,220px); font-weight: 800; line-height: .72; letter-spacing: -.09em; text-transform: uppercase; }
-    .hero-title .row { position: relative; display: block; width: max-content; max-width: 100%; }
-    .hero-title .row:nth-child(2) { margin-left: 11vw; color: var(--signal); }
-    .hero-title .row:nth-child(3) { color: transparent; -webkit-text-stroke: max(1px,.012em) var(--ink); }
-    .hero-side { align-self: stretch; display: flex; flex-direction: column; justify-content: flex-end; padding-bottom: 9px; }
-    .hero-side p { margin: 0 0 28px; font-size: 16px; line-height: 1.58; }
-    .arrow-link { display: inline-flex; align-items: center; justify-content: space-between; min-height: 58px; padding: 0 16px; border: 1px solid currentColor; font: 500 11px/1 DM Mono,monospace; text-transform: uppercase; transition: background .2s,color .2s; }
-    .arrow-link::after { content: "↓"; font-size: 21px; }
-    .arrow-link:hover { color: var(--paper); background: var(--ink); }
-    .hero-stamp { position: absolute; right: 4vw; top: 17%; width: 130px; aspect-ratio: 1; display: grid; place-items: center; border: 1px solid currentColor; border-radius: 50%; font: 500 9px/1.4 DM Mono,monospace; text-align: center; text-transform: uppercase; animation: stampSpin 18s linear infinite; }
-    .hero-stamp::before { content: "Y"; position: absolute; font: 800 48px/1 Manrope,sans-serif; animation: stampSpin 18s linear infinite reverse; }
-
-    .ticker { position: relative; z-index: 3; overflow: hidden; border-top: 1px solid currentColor; border-bottom: 1px solid currentColor; background: var(--acid); color: #111; transform: rotate(-1.4deg) scale(1.02); }
-    .ticker-track { display: flex; width: max-content; animation: ticker 24s linear infinite; }
-    .ticker span { padding: 16px 22px; font: 700 13px/1 DM Mono,monospace; text-transform: uppercase; white-space: nowrap; }
-    .ticker span::after { content: " ✦ "; margin-left: 38px; }
-
-    .thesis { display: grid; align-items: center; }
-    .thesis-grid { display: grid; grid-template-columns: 160px 1fr; gap: 6vw; }
-    .chapter { position: sticky; top: 115px; align-self: start; }
-    .chapter b { display: block; font-size: 64px; line-height: 1; letter-spacing: -.08em; }
-    .chapter span { display: block; margin-top: 10px; font: 500 10px/1.4 DM Mono,monospace; text-transform: uppercase; }
-    .thesis-copy { max-width: 1220px; }
-    .thesis-copy h2 { margin: 0; font-size: clamp(55px,9.1vw,154px); line-height: .9; letter-spacing: -.075em; text-transform: uppercase; }
-    .thesis-copy h2 em { color: var(--signal); font-style: normal; }
-    .thesis-note { display: grid; grid-template-columns: 1fr 1fr; gap: 5vw; margin: 60px 0 0 22%; padding-top: 22px; border-top: 1px solid currentColor; }
-    .thesis-note p { margin: 0; font-size: 17px; line-height: 1.65; }
-
-    .method { padding-bottom: 140px; }
-    .method-head { display: grid; grid-template-columns: .5fr 1fr; gap: 6vw; margin-bottom: 80px; align-items: end; }
-    .method-head h2 { margin: 0; font-size: clamp(60px,10vw,165px); line-height: .76; letter-spacing: -.09em; text-transform: uppercase; }
-    .method-head p { max-width: 500px; margin: 0 0 6px auto; font-size: 17px; line-height: 1.65; }
-    .verbs { border-top: 1px solid currentColor; }
-    .verb { position: relative; display: grid; grid-template-columns: 90px 1fr .65fr; align-items: center; min-height: 190px; border-bottom: 1px solid currentColor; overflow: hidden; }
-    .verb::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--signal); transform: scaleY(0); transform-origin: bottom; transition: transform .45s cubic-bezier(.16,1,.3,1); }
-    .verb:hover::before { transform: scaleY(1); }
-    .verb:hover { color: var(--paper); }
-    .verb-no { font: 500 11px/1 DM Mono,monospace; }
-    .verb strong { font-size: clamp(48px,7.4vw,120px); line-height: .78; letter-spacing: -.08em; text-transform: uppercase; }
-    .verb p { max-width: 470px; padding-left: 25px; margin: 0; font-size: 14px; line-height: 1.6; }
-
-    .cases { height: 360vh; padding: 0; background: #111115; color: #f6f2e9; }
-    .case-stage { position: sticky; top: 0; height: 100vh; height: 100svh; overflow: hidden; }
-    .case-top { position: absolute; z-index: 5; top: 26px; left: 4vw; right: 4vw; display: flex; justify-content: space-between; color: #f6f2e9; }
-    .case-top .kicker::before { background: var(--acid); }
-    .case-dots { display: flex; align-items: center; gap: 7px; }
-    .case-dots i { display: block; width: 28px; height: 4px; background: rgba(255,255,255,.2); }
-    .case-dots i.active { background: var(--acid); }
-    .case-track { height: 100%; display: flex; width: 300vw; transform: translate3d(var(--case-x),0,0); will-change: transform; }
-    .case { position: relative; width: 100vw; flex: 0 0 100vw; min-width: 0; display: grid; grid-template-columns: .72fr 1fr; align-items: end; gap: 5vw; padding: 130px 5vw 5vw; overflow: hidden; }
-    .case:nth-child(1) { background: #111115; color: #f6f2e9; }.case:nth-child(2) { background: #334cff; color: #f6f2e9; }.case:nth-child(3) { background: #ff6546; color: #111115; }
-    .case-index { position: absolute; right: 1vw; top: 5%; opacity: .1; font-size: 42vw; font-weight: 800; line-height: 1; letter-spacing: -.13em; }
-    .case-copy { position: relative; z-index: 2; }
-    .case-label { font: 500 11px/1.4 DM Mono,monospace; text-transform: uppercase; }
-    .case h3 { margin: 24px 0; font-size: clamp(50px,7.5vw,126px); line-height: .83; letter-spacing: -.075em; text-transform: uppercase; }
-    .case p { max-width: 620px; margin: 0; font-size: 16px; line-height: 1.65; }
-    .case-metrics { position: relative; z-index: 2; display: grid; grid-template-columns: 1fr 1fr; border-top: 1px solid currentColor; border-bottom: 1px solid currentColor; }
-    .case-metric { min-height: 240px; padding: 20px; display: flex; flex-direction: column; justify-content: space-between; }
-    .case-metric + .case-metric { border-left: 1px solid currentColor; }
-    .case-metric strong { font-size: clamp(65px,10vw,160px); line-height: .8; letter-spacing: -.095em; }
-    .case-metric span { font: 500 10px/1.45 DM Mono,monospace; text-transform: uppercase; }
-    .scroll-hint { position: absolute; z-index: 8; right: 4vw; bottom: 24px; font: 500 9px/1 DM Mono,monospace; text-transform: uppercase; }
-
-    .offers { background: var(--acid); color: #111115; }
-    .offers-title { display: grid; grid-template-columns: 1fr .5fr; gap: 4vw; align-items: end; margin-bottom: 70px; }
-    .offers-title h2 { margin: 0; font-size: clamp(68px,11vw,185px); line-height: .74; letter-spacing: -.1em; text-transform: uppercase; }
-    .offers-title p { max-width: 430px; margin: 0; font-size: 16px; line-height: 1.6; }
-    .offer-list { border-top: 2px solid currentColor; }
-    .offer-row { position: relative; display: grid; grid-template-columns: 70px 1.1fr 1fr auto; gap: 3vw; align-items: center; min-height: 170px; border-bottom: 2px solid currentColor; }
-    .offer-row > * { position: relative; z-index: 1; }
-    .offer-row::before { content: ""; position: absolute; inset: 0; background: #111115; transform: scaleX(0); transform-origin: right; transition: transform .55s cubic-bezier(.16,1,.3,1); }
-    .offer-row:hover::before { transform: scaleX(1); transform-origin: left; }
-    .offer-row:hover { color: var(--acid); }
-    .offer-row b { font: 500 11px/1 DM Mono,monospace; }
-    .offer-row h3 { margin: 0; font-size: clamp(30px,4vw,67px); line-height: .9; letter-spacing: -.06em; text-transform: uppercase; }
-    .offer-row p { max-width: 430px; margin: 0; font-size: 14px; line-height: 1.55; }
-    .offer-row strong { font-size: clamp(25px,2.5vw,40px); letter-spacing: -.05em; white-space: nowrap; }
-
-    .contact { min-height: 115svh; background: #111115; color: #f4f0e7; overflow: hidden; }
-    .contact-grid { display: grid; grid-template-columns: 1.2fr .6fr; gap: 6vw; align-items: end; min-height: calc(100svh - 184px); }
-    .contact-title { margin: 0; font-size: clamp(67px,11.5vw,190px); font-weight: 800; line-height: .72; letter-spacing: -.095em; text-transform: uppercase; }
-    .contact-title .accent { color: var(--acid); }
-    .contact-side { border: 1px solid rgba(255,255,255,.4); padding: 27px; background: rgba(255,255,255,.025); }
-    .contact-side > p { margin: 0 0 30px; color: #c7c3ba; font-size: 15px; line-height: 1.65; }
-    .field { display: block; margin: 0 0 20px; }
-    .field span { display: block; margin-bottom: 8px; color: #aaa69d; font: 500 9px/1 DM Mono,monospace; text-transform: uppercase; }
-    .field input, .field textarea { width: 100%; padding: 11px 0; color: #f4f0e7; background: transparent; border: 0; border-bottom: 1px solid rgba(255,255,255,.35); border-radius: 0; outline: none; font-size: 16px; }
-    .field textarea { min-height: 83px; resize: vertical; }
-    .field input:focus, .field textarea:focus { border-color: var(--acid); }
-    .send { width: 100%; min-height: 60px; border: 0; background: var(--acid); color: #111; font: 600 11px/1 DM Mono,monospace; text-transform: uppercase; cursor: pointer; }
-    .send:hover { background: #fff; }
-    .demo-note { color: #77756f; font-size: 10px; line-height: 1.5; }
-    footer { position: absolute; bottom: 22px; left: 4vw; right: 4vw; display: flex; justify-content: space-between; font: 400 9px/1.4 DM Mono,monospace; text-transform: uppercase; color: #918e87; }
-
-    @keyframes ticker { to { transform: translateX(-50%); } }
-    @keyframes stampSpin { to { transform: rotate(360deg); } }
-
-    @media (max-width: 1000px) {
-      body { cursor: auto; }
+    @media (max-width: 900px) {
       .cursor { display: none; }
-      .hero-grid, .thesis-grid, .method-head, .offers-title, .contact-grid { grid-template-columns: 1fr; }
-      .hero-side { max-width: 480px; margin: 40px 0 0 auto; }
-      .thesis-grid { gap: 40px; }
-      .chapter { position: static; }
-      .thesis-note { margin-left: 10%; }
-      .method-head p { margin: 25px 0 0 auto; }
-      .verb { grid-template-columns: 60px 1fr; padding-block: 28px; }
-      .verb p { grid-column: 2; padding: 20px 0 0; }
-      .case { grid-template-columns: 1fr; align-content: end; }
-      .case-metrics { max-width: 780px; }
-      .offer-row { grid-template-columns: 55px 1fr auto; padding: 28px 0; }
-      .offer-row p { grid-column: 2 / -1; }
+      .site-header { grid-template-columns: 1fr auto; padding: 14px 20px; }
+      .nav { display: none; }
+      .brand { font-size: 10px; }
+      .header-cta { padding: 10px 13px; }
+      .wrap { width: min(100% - 40px, 680px); }
+      .hero { min-height: 100svh; padding: 108px 0 36px; }
+      .hero-grid, .why-head, .formula-intro, .scenario-heading, .program-head, .skills-grid, .faq-layout, .signup-grid { grid-template-columns: 1fr; gap: 30px; }
+      .hero-meta { justify-items: start; grid-template-columns: 1fr auto; align-items: center; }
+      .hero-meta p { max-width: 250px; }
+      .hero-bottom { margin-top: 42px; }
+      .benefits { grid-template-columns: 1fr 1fr; }
+      .benefit { min-height: 205px; padding: 22px 14px 22px 0; border-bottom: 1px solid var(--line); }
+      .benefit:nth-child(2n) { padding-left: 14px; border-right: none; }
+      .benefit-number { margin-bottom: 35px; }
+      .proof { height: auto; }
+      .proof-stage { position: static; height: auto; overflow: visible; }
+      .proof-track { display: block; width: auto; transform: none !important; }
+      .proof-card { width: auto; min-height: 0; padding: 84px 20px; }
+      .proof-card:nth-child(2n) { background: color-mix(in srgb, var(--ink) 4%, transparent); }
+      .proof-layout, .formula-stage, .scenario-panel { grid-template-columns: 1fr; gap: 30px; }
+      .proof-dots { display: none; }
+      .formula-caption { justify-self: start; }
+      .formula-demo { min-height: 350px; }
+      .scenario-tabs { grid-template-columns: 1fr; }
+      .scenario-tab { min-height: 96px; display: grid; grid-template-columns: 53px 1fr; gap: 12px; align-items: center; padding: 18px; }
+      .scenario-tab .tab-no { margin: 0; }
+      .scenario-tab b { font-size: 18px; }
+      .module summary { grid-template-columns: 47px 1fr auto; gap: 13px; min-height: 92px; }
+      .module-content { grid-template-columns: 1fr; gap: 24px; padding: 0 16px 28px 60px; }
+      .faq-layout { gap: 40px; }
+      .signup-form { grid-template-columns: 1fr; }
+      .field.full, .form-bottom, .form-status { grid-column: auto; }
+      .form-bottom { align-items: flex-start; flex-direction: column-reverse; }
+      .submit { width: 100%; }
+      .site-footer { flex-direction: column; gap: 8px; padding-inline: 20px; }
     }
-    @media (max-width: 700px) {
-      body { overflow-x: clip; }
-      .backword { display: none; }
-      .progress { height: 3px; }
-      .header { left: max(10px, env(safe-area-inset-left)); right: max(10px, env(safe-area-inset-right)); top: max(10px, env(safe-area-inset-top)); min-height: 50px; padding: 0 13px; grid-template-columns: minmax(0,1fr) auto; }
-      .logo { font-size: 20px; }
-      .header-center { display: none; }
-      .header-link { min-height: 44px; gap: 7px; font-size: 10px; }
-      .header-link::after { width: 27px; height: 27px; }
-      .section { padding: calc(88px + env(safe-area-inset-top)) max(20px, env(safe-area-inset-left)) calc(76px + env(safe-area-inset-bottom)); }
-      .section-inner, .hero-grid, .case-copy, .offer-row > * { min-width: 0; }
-      .kicker, .micro { font-size: 11px; }
-      .hero { min-height: 100svh; padding-bottom: calc(40px + env(safe-area-inset-bottom)); }
-      .hero-grid { gap: 28px; }
-      .hero-title { font-size: clamp(46px,14vw,76px); line-height: .77; letter-spacing: -.075em; }
-      .hero-title .row:nth-child(2) { margin-left: 0; }
-      .hero-side { width: min(100%, 460px); margin-top: 0; }
-      .hero-side p { margin-bottom: 22px; font-size: 16px; line-height: 1.55; }
-      .arrow-link { min-height: 54px; font-size: 11px; }
-      .hero-stamp { width: 78px; top: 15%; right: 18px; opacity: .75; }.hero-stamp::before { font-size: 32px; }
-      .chapter b { font-size: 52px; }
-      .chapter span, .case-label, .case-metric span, .field span, footer { font-size: 11px; }
-      .thesis-copy h2 { font-size: clamp(44px,13.6vw,70px); line-height: .93; letter-spacing: -.068em; overflow-wrap: anywhere; }
-      .thesis-note { grid-template-columns: 1fr; gap: 18px; margin: 36px 0 0; }
-      .thesis-note p, .method-head p { font-size: 16px; line-height: 1.6; }
-      .method { padding-bottom: 80px; }
-      .method-head { gap: 26px; margin-bottom: 45px; }.method-head h2 { font-size: clamp(47px,15.5vw,64px); }
-      .method-head p { margin: 0; }
-      .verb { min-height: 0; grid-template-columns: 34px minmax(0,1fr); padding: 25px 0; }.verb strong { font-size: clamp(40px,12.5vw,52px); }.verb p { padding-top: 16px; font-size: 14px; }
-      .cases { height: auto; padding: 0; }
-      .case-stage { position: relative; height: auto; overflow: visible; }
-      .case-top { position: sticky; top: calc(60px + env(safe-area-inset-top)); left: max(20px, env(safe-area-inset-left)); right: max(20px, env(safe-area-inset-right)); gap: 12px; align-items: center; padding: 13px 0; background: #111115; }
-      .case-top .kicker { flex: 1; min-width: 0; gap: 9px; font-size: 10px; }
-      .case-top .kicker::before { flex: 0 0 8px; width: 8px; height: 8px; }
-      .case-dots { flex: 0 0 auto; gap: 5px; }.case-dots i { width: 20px; }
-      .case-track { width: auto; height: auto; display: block; transform: none !important; }
-      .case { width: 100%; min-height: 100svh; gap: 32px; padding: calc(122px + env(safe-area-inset-top)) max(20px, env(safe-area-inset-left)) calc(62px + env(safe-area-inset-bottom)); }
-      .case h3 { margin: 18px 0; font-size: clamp(43px,13.5vw,57px); line-height: .86; }
-      .case p { font-size: 16px; line-height: 1.58; }
-      .case-metric { min-height: 155px; padding: 14px; }.case-metric strong { font-size: clamp(50px,15vw,62px); }
-      .scroll-hint { display: none; }
-      .offers-title { gap: 28px; margin-bottom: 48px; }
-      .offers-title h2 { font-size: clamp(48px,15.5vw,68px); line-height: .78; letter-spacing: -.08em; overflow-wrap: anywhere; }
-      .offers-title p { font-size: 16px; }
-      .offer-row { grid-template-columns: 34px minmax(0,1fr); gap: 14px; min-height: 0; padding: 25px 0; }
-      .offer-row h3 { font-size: clamp(32px,10vw,40px); }.offer-row p, .offer-row strong { grid-column: 2; }.offer-row p { font-size: 14px; }.offer-row strong { padding-top: 8px; font-size: 27px; }
-      .contact { padding-bottom: calc(126px + env(safe-area-inset-bottom)); }.contact-grid { min-height: auto; gap: 40px; }
-      .contact-title { font-size: clamp(48px,14.7vw,70px); line-height: .77; margin-bottom: 0; overflow-wrap: anywhere; }
-      .contact-side { padding: 22px 18px; }
-      .contact-side > p { font-size: 16px; }
-      .field { margin-bottom: 22px; }.field span { margin-bottom: 9px; }
-      .field input, .field textarea { min-height: 46px; font-size: 16px; }
-      .send { min-height: 56px; font-size: 11px; }
-      .demo-note { font-size: 11px; }
-      footer { bottom: calc(18px + env(safe-area-inset-bottom)); left: max(20px, env(safe-area-inset-left)); right: max(20px, env(safe-area-inset-right)); flex-direction: column; gap: 8px; }
-    }
-    @media (max-width: 480px) {
-      .hero-stamp { width: 66px; right: 14px; }.hero-stamp::before { font-size: 27px; }
-      .ticker span { padding: 14px 16px; font-size: 11px; }
-      .thesis-grid { gap: 28px; }
-      .case-index { right: 3vw; top: 7%; font-size: 46vw; }
-      .case-metric { min-height: 142px; }
-      .offer-row b { padding-top: 5px; }
-      .contact-side { padding: 20px 16px; }
-    }
-    @media (max-width: 390px) {
-      .section { padding-left: max(16px, env(safe-area-inset-left)); padding-right: max(16px, env(safe-area-inset-right)); }
-      .header { left: max(8px, env(safe-area-inset-left)); right: max(8px, env(safe-area-inset-right)); }
-      .logo { font-size: 18px; }.header-link { gap: 5px; font-size: 9px; }.header-link::after { width: 25px; height: 25px; }
-      .hero-title { font-size: clamp(43px,13.6vw,53px); }
-      .hero-stamp { display: none; }
-      .case-top { left: max(16px, env(safe-area-inset-left)); right: max(16px, env(safe-area-inset-right)); }
-      .case { padding-left: max(16px, env(safe-area-inset-left)); padding-right: max(16px, env(safe-area-inset-right)); }
-      .case-metrics { grid-template-columns: 1fr; }
-      .case-metric { min-height: 118px; }.case-metric + .case-metric { border-top: 1px solid currentColor; border-left: 0; }
-      .case-metric strong { font-size: 58px; }
-      .contact-title { font-size: clamp(45px,14.4vw,56px); }
-    }
-    @media (max-width: 340px) {
-      .header-link { font-size: 0; }.header-link::after { width: 30px; height: 30px; }
-      .hero-title { font-size: 42px; }
-      .thesis-copy h2, .offers-title h2 { font-size: 43px; }
-      .method-head h2 { font-size: 46px; }
-      .case h3 { font-size: 42px; }
-      .contact-title { font-size: 44px; }
+    @media (max-width: 520px) {
+      .display { font-size: clamp(38px, 12vw, 64px); }
+      .hero-title { font-size: clamp(50px, 14.5vw, 72px); }
+      .hero-meta { grid-template-columns: 1fr; justify-items: start; }
+      .hero-stamp { width: 86px; height: 86px; }
+      .hero-stamp b { font-size: 20px; }
+      .hero-stamp::before { font-size: 5px; }
+      .hero-index { font-size: 64px; }
+      .why, .formula-story, .scenarios, .program, .skills, .faq, .signup { padding: 92px 0; }
+      .why-head { margin-bottom: 45px; }
+      .benefits { grid-template-columns: 1fr; }
+      .benefit, .benefit:nth-child(2n) { min-height: 168px; padding: 20px 0; border-right: none; }
+      .benefit-number { margin-bottom: 22px; }
+      .pivot { grid-template-columns: 1fr; }
+      .mini-chart { min-height: 160px; }
+      .formula-big { word-break: break-word; }
+      .module-title { font-size: 22px; }
+      .keys-card { padding: 22px; }
     }
     @media (prefers-reduced-motion: reduce) {
-      html { scroll-behavior: auto; }
-      *,*::before,*::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; }
-      .glyph,.reveal { opacity: 1 !important; filter: none !important; transform: none !important; transition: none !important; }
+      *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+      .cursor, .progress { display: none; }
     }
   </style>
 </head>
 <body>
   <div class="cursor" aria-hidden="true"></div>
   <div class="progress" aria-hidden="true"></div>
-  <div class="backword" aria-hidden="true">CHAOS</div>
+  <div class="backword" aria-hidden="true">ДАННЫЕ</div>
 
-  <header class="header">
-    <a class="logo interactive" href="#home">YARM</a>
-    <div class="header-center">Ideas → systems → decisions</div>
-    <a class="header-link interactive" href="#contact">Начать проект</a>
+  <header class="site-header">
+    <a class="brand interactive" href="#top" aria-label="YARM — к началу страницы"><span class="brand-mark">Y</span><span>YARM / EXCEL</span></a>
+    <nav class="nav" aria-label="Навигация по странице">
+      <a class="interactive" href="#how">Как будет</a>
+      <a class="interactive" href="#program">Программа</a>
+      <a class="interactive" href="#faq">Вопросы</a>
+    </nav>
+    <a class="header-cta interactive" href="#signup">Записаться</a>
   </header>
 
-  <main>
-    <section class="section hero" id="home" data-paper="#f1eee5" data-ink="#111115" data-signal="#334cff" data-word="CHAOS">
-      <div class="section-inner hero-grid">
-        <h1 class="hero-title" aria-label="Не дашборд. Рентген бизнеса.">
-          <span class="row letters">Не дашборд.</span>
-          <span class="row letters">Рентген</span>
-          <span class="row letters">бизнеса.</span>
-        </h1>
-        <div class="hero-side reveal">
-          <p>Ваши данные уже знают, где вы теряете время. Я заставляю их признаться — и превращаю ответ в систему.</p>
-          <a class="arrow-link interactive" href="#thesis">Начать расследование</a>
+  <main id="top">
+    <section class="hero is-active" data-paper="#101219" data-ink="#f7f3ea" data-signal="#caff36" data-word="ДАННЫЕ">
+      <div class="wrap">
+        <div class="hero-grid">
+          <div>
+            <p class="eyebrow reveal">Практикум · апрель 2026</p>
+            <h1 class="display hero-title" aria-label="Excel за 60 минут">
+              <span class="letters">Excel</span>
+              <span class="letters">за 60 минут</span>
+            </h1>
+            <p class="hero-sub reveal">Практика для тех, кому нужен <strong>понятный отчёт</strong>, а не ещё один файл с ручными расчётами.</p>
+          </div>
+          <div class="hero-meta reveal">
+            <div class="hero-stamp" aria-hidden="true"><b>60</b></div>
+            <p>Сводные таблицы, ВПР + ЕСЛИОШИБКА, диаграммы и логика данных — на примерах из реальной работы.</p>
+          </div>
         </div>
-        <div class="hero-stamp" aria-hidden="true">Data with<br>something<br>to say</div>
+        <div class="hero-bottom reveal">
+          <span class="scroll-note">Листайте — покажем путь данных</span>
+          <span class="hero-index">01</span>
+        </div>
       </div>
     </section>
 
     <div class="ticker" aria-hidden="true">
       <div class="ticker-track">
-        <span>Excel без ручного труда</span><span>Дашборд без лишнего шума</span><span>Обучение без сухой теории</span><span>Данные, которые ведут к решению</span>
-        <span>Excel без ручного труда</span><span>Дашборд без лишнего шума</span><span>Обучение без сухой теории</span><span>Данные, которые ведут к решению</span>
+        <span>СЫРЫЕ ДАННЫЕ <i>✦</i> ПОНЯТНЫЙ ОТЧЁТ <i>✦</i> МИНУТЫ ВМЕСТО ЧАСОВ <i>✦</i> РЕШЕНИЯ НА ЦИФРАХ <i>✦</i></span>
+        <span>СЫРЫЕ ДАННЫЕ <i>✦</i> ПОНЯТНЫЙ ОТЧЁТ <i>✦</i> МИНУТЫ ВМЕСТО ЧАСОВ <i>✦</i> РЕШЕНИЯ НА ЦИФРАХ <i>✦</i></span>
       </div>
     </div>
 
-    <section class="section thesis" id="thesis" data-paper="#f1eee5" data-ink="#111115" data-signal="#ff5f40" data-word="TRUTH">
-      <div class="section-inner thesis-grid">
-        <aside class="chapter reveal"><b>01</b><span>Почему<br>это важно</span></aside>
-        <div class="thesis-copy">
-          <div class="kicker reveal">Неприятная правда</div>
-          <h2><span class="letters">Пока человек сводит отчёт — бизнес уже</span><em class="letters">изменился.</em></h2>
-          <div class="thesis-note reveal"><p>Решение опаздывает не потому, что мало данных. Их слишком много, они разбросаны и говорят на разных языках.</p><p>Поэтому я не рисую красивые таблицы. Я сокращаю расстояние между событием и решением.</p></div>
+    <section class="why" data-paper="#f1ede4" data-ink="#15151a" data-signal="#4a4cff" data-word="ЛОГИКА">
+      <div class="wrap">
+        <div class="why-head">
+          <div>
+            <p class="eyebrow section-kicker reveal">Зачем это вам</p>
+            <h2 class="display" aria-label="Не считать. Понимать."><span class="letters">Не считать.</span><span class="letters">Понимать.</span></h2>
+          </div>
+          <p class="copy reveal">На практикуме не изучаем кнопки ради кнопок. Собираем <strong>рабочий маршрут</strong>: от выгрузки с ошибками до отчёта, по которому можно принять решение.</p>
+        </div>
+        <div class="benefits reveal">
+          <article class="benefit"><span class="benefit-number">01</span><h3>Экономия времени</h3><p>Автоматизируем сверку и поиск вместо ручного копирования между файлами.</p></article>
+          <article class="benefit"><span class="benefit-number">02</span><h3>Быстрый анализ</h3><p>Собираем отчёт за минуты, когда ответ нужен руководителю прямо сейчас.</p></article>
+          <article class="benefit"><span class="benefit-number">03</span><h3>Точность данных</h3><p>Убираем #Н/Д, смещённые диапазоны, лишние пробелы и случайные ошибки.</p></article>
+          <article class="benefit"><span class="benefit-number">04</span><h3>Ясная картинка</h3><p>Показываем цифры диаграммой так, чтобы смысл был виден с первого взгляда.</p></article>
         </div>
       </div>
     </section>
 
-    <section class="section method" id="method" data-paper="#e7e9ff" data-ink="#111115" data-signal="#334cff" data-word="LOGIC">
-      <div class="section-inner">
-        <div class="method-head">
-          <div><div class="kicker reveal">Четыре движения</div><h2><span class="letters">Как</span><span class="letters">я думаю</span></h2></div>
-          <p class="reveal">Инструменты меняются. Способ мышления остаётся: найти реальную боль, проверить логику, убрать лишнее и передать управление команде.</p>
-        </div>
-        <div class="verbs">
-          <div class="verb reveal interactive"><span class="verb-no">01</span><strong>Нахожу</strong><p>Шаг, где теряется время. Число, которому нельзя верить. Вопрос, на который отчёт не отвечает.</p></div>
-          <div class="verb reveal interactive"><span class="verb-no">02</span><strong>Проверяю</strong><p>Источники, правила и роли. До тех пор, пока логика не выдержит неудобный вопрос.</p></div>
-          <div class="verb reveal interactive"><span class="verb-no">03</span><strong>Собираю</strong><p>Одну прозрачную модель вместо множества версий правды и ручных мостов между файлами.</p></div>
-          <div class="verb reveal interactive"><span class="verb-no">04</span><strong>Обучаю</strong><p>Чтобы завтра команда могла повторить результат сама — без создателя и без магии.</p></div>
-        </div>
-      </div>
-    </section>
-
-    <section class="cases" id="cases" data-paper="#111115" data-ink="#f6f2e9" data-signal="#ddff00" data-word="PROOF">
-      <div class="case-stage">
-        <div class="case-top"><div class="kicker">Не обещания. Доказательства.</div><div class="case-dots"><i class="active"></i><i></i><i></i></div></div>
-        <div class="case-track">
-          <article class="case">
-            <span class="case-index">1</span>
-            <div class="case-copy"><span class="case-label">01 / Retail / Executive dashboard</span><h3>Скорость вернулась.</h3><p>Двенадцать разрозненных файлов стали одной моделью, которую руководитель обновляет за секунды.</p></div>
-            <div class="case-metrics"><div class="case-metric"><strong>2ч</strong><span>было на отчёт</span></div><div class="case-metric"><strong>30с</strong><span>стало на обновление</span></div></div>
+    <section class="proof" id="how" data-paper="#171b48" data-ink="#faf7ec" data-signal="#e0ff56" data-word="ОТЧЁТ">
+      <div class="proof-stage">
+        <div class="proof-track">
+          <article class="proof-card is-shown">
+            <div class="proof-layout">
+              <div>
+                <span class="proof-no">01 / ДО</span>
+                <h2>Данные<br>вперемешку</h2>
+                <p>Несколько таблиц, разные форматы, цены приходится искать вручную. На это уходит не мышление — а время.</p>
+              </div>
+              <div class="excel-window reveal" aria-label="Пример исходной таблицы Excel">
+                <div class="excel-top"><i></i><i></i><i></i><span class="excel-title">ЗАКАЗЫ_АПРЕЛЬ.xlsx</span></div>
+                <div class="spread-preview">
+                  <table class="sheet"><thead><tr><th>Код</th><th>Товар</th><th>Цвет</th><th>Цена</th></tr></thead><tbody>
+                    <tr><td>T001</td><td>Кровать Elisa</td><td>Sky Velvet 38</td><td class="bad">#Н/Д</td></tr>
+                    <tr><td>T003</td><td>Диван Ральф</td><td>Казанова десерт</td><td class="muted-cell">—</td></tr>
+                    <tr><td>T005</td><td>Матрас Serta</td><td>White</td><td class="bad">#Н/Д</td></tr>
+                    <tr><td class="muted-cell">T0O7</td><td>Кровать</td><td>—</td><td class="muted-cell">?</td></tr>
+                  </tbody></table>
+                </div>
+              </div>
+            </div>
           </article>
-          <article class="case">
-            <span class="case-index">2</span>
-            <div class="case-copy"><span class="case-label">02 / Production / Power Query</span><h3>Ручной труд исчез.</h3><p>Четыре источника связаны в устойчивый процесс. Свод больше не зависит от памяти одного человека.</p></div>
-            <div class="case-metrics"><div class="case-metric"><strong>4→1</strong><span>источники в модели</span></div><div class="case-metric"><strong>0</strong><span>ручных сводов</span></div></div>
+          <article class="proof-card">
+            <div class="proof-layout">
+              <div>
+                <span class="proof-no">02 / ФОРМУЛА</span>
+                <h2>Поиск<br>в один шаг</h2>
+                <p>ВПР находит нужное значение по коду, а ЕСЛИОШИБКА не даёт ошибке разрушить весь отчёт. Разберём логику, а не магию формулы.</p>
+              </div>
+              <div class="formula-window reveal" aria-label="Пример формулы ВПР в Excel">
+                <div class="formula-bar"><b>fx</b> =ЕСЛИОШИБКА(ВПР(A2;Прайс!$A$2:$C$10;3;0);"Проверить")</div>
+                <div class="code-sheet">
+                  <div class="code-line"><em>01</em><span><span class="accent">ВПР</span> ищет код товара</span></div>
+                  <div class="code-line"><em>02</em><span>в таблице <span class="string">«Прайс»</span></span></div>
+                  <div class="code-line"><em>03</em><span>и возвращает <span class="accent">цену</span></span></div>
+                  <div class="code-line"><em>04</em><span><span class="accent">ЕСЛИОШИБКА</span> защищает отчёт</span></div>
+                  <span class="result-chip">✓ Цена найдена: 45 000 ₽</span>
+                </div>
+              </div>
+            </div>
           </article>
-          <article class="case">
-            <span class="case-index">3</span>
-            <div class="case-copy"><span class="case-label">03 / Education / Team upgrade</span><h3>Знание осталось.</h3><p>Команда училась на своих задачах и собрала инструменты, которыми продолжила пользоваться после программы.</p></div>
-            <div class="case-metrics"><div class="case-metric"><strong>8</strong><span>людей в команде</span></div><div class="case-metric"><strong>6</strong><span>недель практики</span></div></div>
+          <article class="proof-card">
+            <div class="proof-layout">
+              <div>
+                <span class="proof-no">03 / РЕШЕНИЕ</span>
+                <h2>Сводный<br>отчёт</h2>
+                <p>Поле «Товар» — в строки. Сумма продаж — в значения. Дальше цифры сами выстраивают ответ: что растёт, где провал, куда смотреть.</p>
+              </div>
+              <div class="excel-window reveal" aria-label="Пример сводной таблицы и диаграммы">
+                <div class="excel-top"><i></i><i></i><i></i><span class="excel-title">ОТЧЁТ_РУКОВОДИТЕЛЮ.xlsx</span></div>
+                <div class="pivot-shell">
+                  <div class="pivot-head"><span>Сводная таблица</span><b>Σ Продажи</b></div>
+                  <div class="pivot">
+                    <div class="pivot-table"><div class="pivot-row"><span>Категория</span><span>Сумма</span></div><div class="pivot-row"><span>Матрасы</span><span>1 240 000 ₽</span></div><div class="pivot-row"><span>Кровати</span><span>980 000 ₽</span></div><div class="pivot-row"><span>Диваны</span><span>640 000 ₽</span></div><div class="pivot-row"><span>Итог</span><span>2 860 000 ₽</span></div></div>
+                    <div class="mini-chart"><div class="mini-bar" style="height:90%"><span>Матрасы</span></div><div class="mini-bar" style="height:72%"><span>Кровати</span></div><div class="mini-bar" style="height:47%"><span>Диваны</span></div><div class="mini-bar" style="height:31%"><span>Кресла</span></div></div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </article>
         </div>
-        <div class="scroll-hint">Прокрутите, чтобы пройти кейсы →</div>
+        <div class="proof-dots" aria-hidden="true"><i class="active"></i><i></i><i></i></div>
       </div>
     </section>
 
-    <section class="section offers" id="offers" data-paper="#ddff00" data-ink="#111115" data-signal="#334cff" data-word="VALUE">
-      <div class="section-inner">
-        <div class="offers-title">
-          <div><div class="kicker reveal">Точка входа</div><h2><span class="letters">Выберите</span><span class="letters">масштаб.</span></h2></div>
-          <p class="reveal">Можно начать с одного неудобного файла. Можно сразу перестроить процесс. В обоих случаях сначала появится ясность.</p>
+    <section class="formula-story" data-paper="#f6f2eb" data-ink="#171718" data-signal="#d85532" data-word="ФОРМУЛА">
+      <div class="wrap">
+        <div class="formula-intro">
+          <div>
+            <p class="eyebrow section-kicker reveal">Живой пример</p>
+            <h2 class="display" aria-label="Таблица считает сама"><span class="letters">Таблица</span><span class="letters">считает сама.</span></h2>
+          </div>
+          <p class="copy formula-caption reveal">Прокрутите этот блок: сначала появляются строки, затем формула, и только после этого — точное значение. Такую последовательность разберём на практикуме.</p>
         </div>
-        <div class="offer-list reveal">
-          <article class="offer-row interactive"><b>01</b><h3>Аудит файла</h3><p>Ошибки, узкие места и карта улучшений с приоритетами.</p><strong>от 8 000 ₽</strong></article>
-          <article class="offer-row interactive"><b>02</b><h3>Дашборд</h3><p>Модель, автоматическое обновление и интерфейс для решения.</p><strong>от 45 000 ₽</strong></article>
-          <article class="offer-row interactive"><b>03</b><h3>Обучение</h3><p>Практика на ваших задачах — до самостоятельного результата.</p><strong>от 25 000 ₽</strong></article>
+        <div class="formula-stage reveal" id="formula-stage">
+          <div class="formula-explain">
+            <span class="proof-no">ВПР + ЕСЛИОШИБКА</span>
+            <p class="formula-big">=ЕСЛИОШИБКА<br>(ВПР(...);0)</p>
+            <p class="copy">Формула берёт код из заказа, находит его в прайсе и возвращает цену. Если совпадения нет — не показывает страшную ошибку, а сигнализирует корректно.</p>
+            <div class="formula-points"><div class="formula-point"><b>01</b><span>Ищем значение по коду, а не глазами в другом листе.</span></div><div class="formula-point"><b>02</b><span>Закрепляем диапазон через <strong>$</strong>, чтобы он не съезжал.</span></div><div class="formula-point"><b>03</b><span>Защищаем итог от <strong>#Н/Д</strong> функцией ЕСЛИОШИБКА.</span></div></div>
+          </div>
+          <div class="formula-demo">
+            <div class="excel-window">
+              <div class="excel-top"><i></i><i></i><i></i><span class="excel-title">СВЕРКА_ЦЕН.xlsx</span></div>
+              <div class="spread-preview">
+                <table class="sheet"><thead><tr><th>Код</th><th>Товар</th><th>Цена</th></tr></thead><tbody>
+                  <tr class="cell-appear"><td>T001</td><td>Кровать Elisa</td><td class="formula-cell">45 000 ₽</td></tr>
+                  <tr class="cell-appear"><td>T002</td><td>Диван Ральф</td><td class="formula-cell">76 000 ₽</td></tr>
+                  <tr class="cell-appear"><td>T003</td><td>Матрас Serta</td><td class="formula-cell">32 500 ₽</td></tr>
+                  <tr class="cell-appear"><td>T005</td><td>Кресло Iowa</td><td class="selected">18 900 ₽</td></tr>
+                </tbody></table>
+              </div>
+            </div>
+            <div class="formula-result">T005 → 18 900 ₽ ✓</div>
+          </div>
         </div>
       </div>
     </section>
 
-    <section class="section contact" id="contact" data-paper="#111115" data-ink="#f4f0e7" data-signal="#ddff00" data-word="START">
-      <div class="section-inner contact-grid">
-        <h2 class="contact-title" aria-label="Пришлите самый неудобный файл."><span class="letters">Пришлите</span><span class="letters accent">самый</span><span class="letters">неудобный</span><span class="letters">файл.</span></h2>
-        <form class="contact-side reveal" id="contactForm">
-          <p>Именно с него обычно начинается лучшая система. Опишите задачу — отвечу, что можно изменить и с какого шага начать.</p>
-          <label class="field"><span>Имя</span><input name="name" autocomplete="name" placeholder="Как к вам обращаться" required></label>
-          <label class="field"><span>Контакт</span><input name="contact" placeholder="Telegram или email" required></label>
-          <label class="field"><span>Что происходит сейчас</span><textarea name="problem" placeholder="Каждую неделю мы вручную…" required></textarea></label>
-          <button class="send interactive" type="submit">Отправить неудобную правду ↗</button>
-          <p class="demo-note">Демо-форма: подключите отправку в Telegram, почту или CRM.</p>
+    <section class="scenarios" data-paper="#f0ff74" data-ink="#171d13" data-signal="#5a2bff" data-word="ВИДНО">
+      <div class="wrap">
+        <div class="scenario-heading">
+          <div>
+            <p class="eyebrow section-kicker reveal">На ваших задачах</p>
+            <h2 class="display" aria-label="Не учебная таблица. Рабочая."><span class="letters">Не учебная</span><span class="letters">таблица. Рабочая.</span></h2>
+          </div>
+          <p class="copy reveal">Выберите сценарий: каждый показывает, как одна и та же логика превращает рабочую выгрузку в вопрос, на который легко ответить.</p>
+        </div>
+        <div class="scenario-tabs reveal" role="tablist" aria-label="Сценарии практики">
+          <button class="scenario-tab interactive" type="button" role="tab" aria-selected="true" aria-controls="sales-panel" data-tab="sales"><span class="tab-no">01</span><b>Продажи по категориям</b></button>
+          <button class="scenario-tab interactive" type="button" role="tab" aria-selected="false" aria-controls="plan-panel" data-tab="plan"><span class="tab-no">02</span><b>План / факт без ручных расчётов</b></button>
+          <button class="scenario-tab interactive" type="button" role="tab" aria-selected="false" aria-controls="stock-panel" data-tab="stock"><span class="tab-no">03</span><b>Остатки, которые требуют внимания</b></button>
+        </div>
+        <div class="scenario-stage reveal">
+          <div class="scenario-panel active" id="sales-panel" role="tabpanel"><div><span class="proof-no">СВОДНАЯ + ДИАГРАММА</span><h3>Что даёт<br>оборот?</h3><p>Сравниваем категории без десятков строк. Видно, где главный объём, а где можно добавить фокус уже сегодня.</p></div><div class="scenario-output"><small>Продажи по категориям</small><div class="metric">2,86 млн ₽</div><div class="scenario-bars"><i style="height:88%"></i><i></i><i></i><i></i><i></i></div></div></div>
+          <div class="scenario-panel" id="plan-panel" role="tabpanel"><div><span class="proof-no">ФОРМУЛЫ + УСЛОВИЕ</span><h3>Где план<br>отстаёт?</h3><p>Формула считает выполнение, а форматирование мягко подсвечивает зоны внимания. Больше не нужно выискивать их глазами.</p></div><div class="scenario-output"><small>Выполнение плана</small><div class="metric">87,4%</div><div class="scenario-bars"><i style="height:83%"></i><i></i><i></i><i></i><i></i></div></div></div>
+          <div class="scenario-panel" id="stock-panel" role="tabpanel"><div><span class="proof-no">ФИЛЬТРЫ + СВОДНАЯ</span><h3>Что нужно<br>проверить?</h3><p>Группируем остатки, выделяем повторяющиеся позиции и быстро находим те, где данные пора обновить.</p></div><div class="scenario-output"><small>Позиции в фокусе</small><div class="metric">17 SKU</div><div class="scenario-bars"><i style="height:43%"></i><i></i><i></i><i></i><i></i></div></div></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="program" id="program" data-paper="#321762" data-ink="#fbf6ee" data-signal="#ff926c" data-word="НАВЫК">
+      <div class="wrap">
+        <div class="program-head">
+          <div>
+            <p class="eyebrow section-kicker reveal">Программа</p>
+            <h2 class="display" aria-label="Нажмите на модуль"><span class="letters">Нажмите</span><span class="letters">на модуль.</span></h2>
+          </div>
+          <p class="copy reveal">У каждого блока есть конкретный результат: <strong>что изучите</strong> и <strong>зачем это нужно</strong> в вашей работе.</p>
+        </div>
+        <div class="program-list reveal">
+          <details class="module" open><summary class="interactive"><span class="module-no">01</span><span class="module-title">Подготовка данных</span><span class="module-plus">+</span></summary><div class="module-content"><p><strong>Что изучим:</strong> пять правил перед анализом — один ряд заголовков, единые форматы, отсутствие пустых строк и объединений, чистый текст. <strong>Зачем:</strong> сводная таблица и формулы перестают «ломаться» ещё до начала расчётов.</p><ul><li>как за 30 секунд увидеть источник ошибки;</li><li>зачем превращать диапазон в «умную таблицу» через Ctrl + T;</li><li>как обновлять данные без потери структуры.</li></ul></div></details>
+          <details class="module"><summary class="interactive"><span class="module-no">02</span><span class="module-title">Сводные таблицы</span><span class="module-plus">+</span></summary><div class="module-content"><p><strong>Что изучим:</strong> строки, столбцы, значения, фильтры и срезы. <strong>Зачем:</strong> одним движением собирать продажи по категориям, менеджерам, периодам и получать ответ без длинных формул.</p><ul><li>как создать сводную с нуля;</li><li>куда перетащить поле, чтобы получить нужный срез;</li><li>как правильно обновлять отчёт при новых данных.</li></ul></div></details>
+          <details class="module"><summary class="interactive"><span class="module-no">03</span><span class="module-title">ВПР + ЕСЛИОШИБКА</span><span class="module-plus">+</span></summary><div class="module-content"><p><strong>Что изучим:</strong> поиск цены, статуса или названия по коду; точное совпадение; абсолютные ссылки с символом $. <strong>Зачем:</strong> подтягивать информацию между таблицами автоматически, а не копировать вручную.</p><ul><li>разбор формулы по аргументам;</li><li>что делать с #Н/Д и #ЗНАЧ!;</li><li>когда лучше использовать ПРОСМОТРX.</li></ul></div></details>
+          <details class="module"><summary class="interactive"><span class="module-no">04</span><span class="module-title">Диаграммы для решения</span><span class="module-plus">+</span></summary><div class="module-content"><p><strong>Что изучим:</strong> как выбрать диаграмму под вопрос, убрать визуальный шум и дать цифрам понятный контекст. <strong>Зачем:</strong> чтобы руководитель увидел главное раньше, чем откроет исходную таблицу.</p><ul><li>столбцы для сравнения;</li><li>линия для динамики;</li><li>сводная диаграмма, которая меняется вместе с фильтром.</li></ul></div></details>
+        </div>
+      </div>
+    </section>
+
+    <section class="skills" data-paper="#101219" data-ink="#f7f3ea" data-signal="#caff36" data-word="ГОТОВО">
+      <div class="wrap skills-grid">
+        <div>
+          <p class="eyebrow section-kicker reveal">После практикума</p>
+          <h2 class="display" aria-label="Не просто узнаете. Сделаете."><span class="letters">Не просто</span><span class="letters">узнаете. Сделаете.</span></h2>
+          <p class="copy reveal">Уйдёте не с конспектом функций, а с понятной схемой, которую можно повторить на своей выгрузке уже на следующий день.</p>
+        </div>
+        <div class="skill-stack reveal">
+          <div class="skill"><b>01</b><span>Понимаете, готовы ли исходные данные к анализу.</span></div>
+          <div class="skill"><b>02</b><span>Собираете сводный отчёт за минуты вместо часов.</span></div>
+          <div class="skill"><b>03</b><span>Подтягиваете данные формулой и защищаете итог от ошибок.</span></div>
+          <div class="skill"><b>04</b><span>Показываете результат диаграммой — ясно и без перегруза.</span></div>
+          <div class="skill"><b>05</b><span>Знаете, как обновить отчёт, когда появились новые строки.</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="skills" data-paper="#f1ede4" data-ink="#15151a" data-signal="#4a4cff" data-word="БЫСТРО">
+      <div class="wrap skills-grid">
+        <div>
+          <p class="eyebrow section-kicker reveal">Бонус</p>
+          <h2 class="display" aria-label="Работать быстрее"><span class="letters">Работать</span><span class="letters">быстрее.</span></h2>
+          <p class="copy reveal">Короткий набор горячих клавиш — только те, которые действительно сокращают повторяющиеся действия в больших таблицах.</p>
+        </div>
+        <aside class="keys-card reveal" aria-label="Горячие клавиши Excel"><h3>Клавиши, которые остаются с вами</h3><div class="key"><span>Превратить диапазон в умную таблицу</span><kbd>Ctrl + T</kbd></div><div class="key"><span>Закрепить диапазон в формуле</span><kbd>F4</kbd></div><div class="key"><span>Включить или выключить фильтры</span><kbd>Ctrl + Shift + L</kbd></div><div class="key"><span>Автоматически посчитать сумму</span><kbd>Alt + =</kbd></div><div class="key"><span>Обновить все данные</span><kbd>Ctrl + Alt + F5</kbd></div></aside>
+      </div>
+    </section>
+
+    <section class="faq" id="faq" data-paper="#101219" data-ink="#f7f3ea" data-signal="#caff36" data-word="ВОПРОС">
+      <div class="wrap faq-layout">
+        <div><p class="eyebrow section-kicker reveal">Важно знать</p><h2 class="display" aria-label="Без лишней теории"><span class="letters">Без лишней</span><span class="letters">теории.</span></h2></div>
+        <div class="faq-list reveal">
+          <details class="faq-item"><summary>Нужно ли уже уметь работать в Excel?</summary><p>Нет. Начинаем с логики подготовки данных и постепенно переходим к формулам и сводным. Полезно, если вы уже открывали Excel и знаете, что такое ячейка и столбец.</p></details>
+          <details class="faq-item"><summary>Будут реальные рабочие примеры?</summary><p>Да. В основе — сценарии продаж, план/факт, прайсы и остатки. Их легко заменить на ваши данные после практикума.</p></details>
+          <details class="faq-item"><summary>Что взять с собой?</summary><p>Ноутбук с Excel и, если есть возможность, одну несложную выгрузку из вашей работы. Мы покажем, как применить подход к ней.</p></details>
+          <details class="faq-item"><summary>Можно ли задать свой вопрос?</summary><p>Да. В программе заложено время на практику и вопросы — разберём типовые ситуации, которые мешают собрать отчёт.</p></details>
+        </div>
+      </div>
+    </section>
+
+    <section class="signup" id="signup" data-paper="#b9ff3e" data-ink="#11170d" data-signal="#5430ff" data-word="ИДЁМ">
+      <div class="wrap signup-grid">
+        <div>
+          <p class="eyebrow section-kicker reveal">Запись на практикум</p>
+          <h2 class="display" aria-label="Пора, когда цифры работают на вас"><span class="letters">Пора, когда</span><span class="letters">цифры работают</span><span class="letters">на вас.</span></h2>
+          <p class="copy reveal">Оставьте контакты — заявка сразу поступит организатору. Ответим с деталями участия.</p>
+        </div>
+        <form class="signup-form reveal" id="signup-form" action="https://formsubmit.co/yarmarka_ast@askona.ru" method="POST">
+          <input type="hidden" name="_subject" value="Новая заявка — Практикум Excel">
+          <input type="hidden" name="_template" value="table">
+          <input type="hidden" name="_captcha" value="false">
+          <input type="hidden" name="Источник" value="Лендинг YARM — Практикум Excel">
+          <div class="field"><label for="name">Имя и фамилия</label><input id="name" name="Имя" autocomplete="name" placeholder="Как к вам обращаться" required></div>
+          <div class="field"><label for="contact">Телефон или Telegram</label><input id="contact" name="Контакт" autocomplete="tel" placeholder="Чтобы связаться" required></div>
+          <div class="field"><label for="email">Рабочая почта</label><input id="email" name="Email" type="email" autocomplete="email" placeholder="name@company.ru" required></div>
+          <div class="field"><label for="role">Ваша роль</label><select id="role" name="Роль" required><option value="" selected disabled>Выберите вариант</option><option>Менеджер</option><option>Руководитель</option><option>Аналитик / офис</option><option>Другое</option></select></div>
+          <div class="field full"><label for="task">Что хотите упростить в Excel?</label><textarea id="task" name="Задача" placeholder="Например: сверку прайса, план/факт, остатки…"></textarea></div>
+          <div class="form-bottom"><p class="form-note">Нажимая «Отправить заявку», вы передаёте контакты организатору практикума для связи по участию.</p><button class="submit interactive" type="submit">Отправить заявку →</button></div>
+          <p class="form-status" id="form-status" role="status" aria-live="polite"></p>
         </form>
       </div>
-      <footer><span>YARM © 2026 / QUANTUM EDITORIAL</span><span>Excel · Data · Education</span></footer>
     </section>
   </main>
 
+  <footer class="site-footer"><span><b>YARM / EXCEL</b> · Практикум, который превращает данные в действие.</span><span>Вопросы: yarmarka_ast@askona.ru</span></footer>
+
   <script>
-    (() => {
-      const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
-      const root = document.documentElement;
-      const body = document.body;
-      const theme = document.querySelector('meta[name="theme-color"]');
-      const backword = document.querySelector('.backword');
+    (function () {
+      var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      var root = document.documentElement;
+      var themeMeta = document.querySelector('meta[name="theme-color"]');
+      var ghostWord = document.querySelector('.backword');
+      var sections = Array.prototype.slice.call(document.querySelectorAll('[data-paper]'));
+      var vectors = [[0,90,-8,.65],[65,0,12,.82],[-55,40,-15,.72],[0,-70,7,.88],[35,75,18,.70],[-25,-55,-10,.78]];
 
-      document.querySelectorAll('.letters').forEach((el, group) => {
-        const text = el.textContent;
-        if (!el.closest('[aria-label]')) el.setAttribute('aria-label', text.trim().replace(/\s+/g,' '));
-        const frag = document.createDocumentFragment();
-        [...text].forEach((ch, i) => {
-          const glyph = document.createElement('span');
-          glyph.className = 'glyph' + (/\s/.test(ch) ? ' space' : '');
-          glyph.setAttribute('aria-hidden','true');
-          glyph.textContent = /\s/.test(ch) ? '\u00a0' : ch;
-          const mode = (i + group * 3) % 6;
-          const vectors = [[0,90,-8,.65],[65,0,12,.82],[-55,40,-15,.72],[0,-70,7,.88],[35,75,18,.7],[-25,-55,-10,.78]];
-          const [x,y,r,s] = vectors[mode];
-          glyph.style.setProperty('--i',i);
-          glyph.style.setProperty('--gx',`${x}px`);
-          glyph.style.setProperty('--gy',`${y}px`);
-          glyph.style.setProperty('--gr',`${r}deg`);
-          glyph.style.setProperty('--gs',s);
-          glyph.style.setProperty('--blur',`${4 + mode*1.5}px`);
-          frag.appendChild(glyph);
+      document.querySelectorAll('.letters').forEach(function (el, group) {
+        var text = el.textContent;
+        var fragment = document.createDocumentFragment();
+        Array.prototype.slice.call(text).forEach(function (character, index) {
+          var glyph = document.createElement('span');
+          var vector = vectors[(index + group * 3) % vectors.length];
+          glyph.className = 'glyph' + (/\s/.test(character) ? ' space' : '');
+          glyph.setAttribute('aria-hidden', 'true');
+          glyph.textContent = /\s/.test(character) ? '\u00a0' : character;
+          glyph.style.setProperty('--i', index);
+          glyph.style.setProperty('--gx', vector[0] + 'px');
+          glyph.style.setProperty('--gy', vector[1] + 'px');
+          glyph.style.setProperty('--gr', vector[2] + 'deg');
+          glyph.style.setProperty('--gs', vector[3]);
+          glyph.style.setProperty('--blur', (4 + ((index + group * 3) % 6) * 1.5) + 'px');
+          fragment.appendChild(glyph);
         });
-        el.replaceChildren(frag);
+        el.replaceChildren(fragment);
       });
 
-      const sections = [...document.querySelectorAll('[data-paper]')];
-      const sectionObserver = new IntersectionObserver(entries => {
-        entries.forEach(entry => {
-          if (!entry.isIntersecting) return;
-          const el = entry.target;
-          sections.forEach(s => s.classList.toggle('is-active',s === el));
-          root.style.setProperty('--paper',el.dataset.paper);
-          root.style.setProperty('--ink',el.dataset.ink);
-          root.style.setProperty('--signal',el.dataset.signal);
-          theme.setAttribute('content',el.dataset.paper);
-          backword.style.opacity = '0';
-          setTimeout(() => { backword.textContent = el.dataset.word; backword.style.opacity = '1'; }, 170);
+      function revealImmediately() {
+        document.querySelectorAll('.reveal').forEach(function (el) { el.classList.add('seen'); });
+        document.querySelectorAll('[data-paper]').forEach(function (el) { el.classList.add('is-active'); });
+      }
+
+      if (reduceMotion || !('IntersectionObserver' in window)) {
+        revealImmediately();
+      } else {
+        var revealObserver = new IntersectionObserver(function (entries) {
+          entries.forEach(function (entry) {
+            if (!entry.isIntersecting) return;
+            entry.target.classList.add('seen');
+            revealObserver.unobserve(entry.target);
+          });
+        }, { threshold: .12 });
+        document.querySelectorAll('.reveal').forEach(function (el) { revealObserver.observe(el); });
+
+        var sectionObserver = new IntersectionObserver(function (entries) {
+          entries.forEach(function (entry) {
+            if (!entry.isIntersecting) return;
+            var section = entry.target;
+            sections.forEach(function (item) { item.classList.toggle('is-active', item === section); });
+            root.style.setProperty('--paper', section.dataset.paper);
+            root.style.setProperty('--ink', section.dataset.ink);
+            root.style.setProperty('--signal', section.dataset.signal);
+            if (themeMeta) themeMeta.setAttribute('content', section.dataset.paper);
+            ghostWord.style.opacity = '0';
+            window.setTimeout(function () { ghostWord.textContent = section.dataset.word; ghostWord.style.opacity = '1'; }, 170);
+          });
+        }, { threshold: .28 });
+        sections.forEach(function (section) { sectionObserver.observe(section); });
+      }
+
+      function updateProgress() {
+        var max = document.documentElement.scrollHeight - window.innerHeight;
+        root.style.setProperty('--progress', max ? ((window.scrollY / max) * 100).toFixed(2) : 0);
+      }
+      updateProgress();
+      window.addEventListener('scroll', function () { window.requestAnimationFrame(updateProgress); }, { passive: true });
+      window.addEventListener('resize', updateProgress);
+
+      var cursor = document.querySelector('.cursor');
+      if (cursor && window.matchMedia('(min-width: 901px)').matches && !reduceMotion) {
+        var mx = window.innerWidth / 2, my = window.innerHeight / 2, cx = mx, cy = my;
+        window.addEventListener('pointermove', function (event) { mx = event.clientX; my = event.clientY; }, { passive: true });
+        document.querySelectorAll('.interactive').forEach(function (element) {
+          element.addEventListener('pointerenter', function () { document.body.classList.add('link-hover'); });
+          element.addEventListener('pointerleave', function () { document.body.classList.remove('link-hover'); });
         });
-      }, { threshold:.28 });
-      sections.forEach(el => sectionObserver.observe(el));
+        (function cursorLoop() { cx += (mx - cx) * .19; cy += (my - cy) * .19; cursor.style.transform = 'translate(' + cx + 'px,' + cy + 'px) translate(-50%,-50%)'; window.requestAnimationFrame(cursorLoop); })();
+      }
 
-      const revealObserver = new IntersectionObserver(entries => entries.forEach(entry => {
-        if (entry.isIntersecting) { entry.target.classList.add('seen'); revealObserver.unobserve(entry.target); }
-      }), { threshold:.12 });
-      document.querySelectorAll('.reveal').forEach(el => revealObserver.observe(el));
+      var heroTitle = document.querySelector('.hero-title');
+      if (heroTitle && !reduceMotion) {
+        window.addEventListener('pointermove', function (event) {
+          if (window.innerWidth < 800) return;
+          heroTitle.style.transform = 'translate(' + ((event.clientX / window.innerWidth - .5) * -10) + 'px,' + ((event.clientY / window.innerHeight - .5) * -8) + 'px)';
+        }, { passive: true });
+      }
 
-      const cursor = document.querySelector('.cursor');
-      let mx = innerWidth/2, my = innerHeight/2, cx = mx, cy = my;
-      addEventListener('pointermove', e => { mx=e.clientX; my=e.clientY; root.style.setProperty('--mx',`${mx}px`); root.style.setProperty('--my',`${my}px`); }, {passive:true});
-      document.querySelectorAll('.interactive').forEach(el => {
-        el.addEventListener('pointerenter',()=>body.classList.add('link-hover'));
-        el.addEventListener('pointerleave',()=>body.classList.remove('link-hover'));
-      });
-      const cursorLoop = () => { cx += (mx-cx)*.19; cy += (my-cy)*.19; cursor.style.transform=`translate(${cx}px,${cy}px) translate(-50%,-50%)`; requestAnimationFrame(cursorLoop); };
-      if (!reduced) cursorLoop();
-
-      const cases = document.querySelector('.cases');
-      const dots = [...document.querySelectorAll('.case-dots i')];
-      let ticking = false;
-      function updateScroll() {
-        const max = document.documentElement.scrollHeight-innerHeight;
-        root.style.setProperty('--progress',max ? (scrollY/max*100).toFixed(2):0);
-        if (innerWidth > 700) {
-          const rect = cases.getBoundingClientRect();
-          const travel = cases.offsetHeight-innerHeight;
-          const p = Math.min(1,Math.max(0,-rect.top/travel));
-          root.style.setProperty('--case-x',`${(-p*200).toFixed(3)}vw`);
-          const active = Math.min(2,Math.floor(p*3));
-          dots.forEach((dot,i)=>dot.classList.toggle('active',i===active));
+      var proof = document.querySelector('.proof');
+      var proofCards = Array.prototype.slice.call(document.querySelectorAll('.proof-card'));
+      var dots = Array.prototype.slice.call(document.querySelectorAll('.proof-dots i'));
+      function updateProof() {
+        if (!proof || window.innerWidth <= 900) {
+          proofCards.forEach(function (card) { card.classList.add('is-shown'); });
+          return;
         }
-        ticking=false;
+        var rect = proof.getBoundingClientRect();
+        var travel = proof.offsetHeight - window.innerHeight;
+        var progress = Math.min(1, Math.max(0, -rect.top / travel));
+        root.style.setProperty('--case-x', (-progress * 200).toFixed(3) + 'vw');
+        var active = Math.min(2, Math.floor(progress * 3));
+        proofCards.forEach(function (card, index) { card.classList.toggle('is-shown', index <= active); });
+        dots.forEach(function (dot, index) { dot.classList.toggle('active', index === active); });
       }
-      addEventListener('scroll',()=>{ if(!ticking){requestAnimationFrame(updateScroll);ticking=true;} },{passive:true});
-      addEventListener('resize',updateScroll); updateScroll();
+      updateProof();
+      window.addEventListener('scroll', function () { window.requestAnimationFrame(updateProof); }, { passive: true });
+      window.addEventListener('resize', updateProof);
 
-      if (!reduced) {
-        const hero = document.querySelector('.hero-title');
-        addEventListener('pointermove', e => {
-          if (innerWidth < 800) return;
-          hero.style.transform = `translate(${(e.clientX/innerWidth-.5)*-10}px,${(e.clientY/innerHeight-.5)*-8}px)`;
-        }, {passive:true});
-      }
+      var formulaStage = document.querySelector('#formula-stage');
+      if (formulaStage && 'IntersectionObserver' in window && !reduceMotion) {
+        var formulaObserver = new IntersectionObserver(function (entries) {
+          entries.forEach(function (entry) { if (entry.isIntersecting) { formulaStage.classList.add('is-live'); formulaObserver.unobserve(formulaStage); } });
+        }, { threshold: .42 });
+        formulaObserver.observe(formulaStage);
+      } else if (formulaStage) { formulaStage.classList.add('is-live'); }
 
-      document.getElementById('contactForm').addEventListener('submit', e => {
-        e.preventDefault();
-        const button = e.currentTarget.querySelector('button');
-        const original = button.textContent;
-        button.textContent = 'Правда принята ✓'; button.disabled = true;
-        setTimeout(()=>{ button.textContent=original; button.disabled=false; e.currentTarget.reset(); },2200);
+      var tabs = Array.prototype.slice.call(document.querySelectorAll('[data-tab]'));
+      var panels = Array.prototype.slice.call(document.querySelectorAll('.scenario-panel'));
+      tabs.forEach(function (tab) {
+        tab.addEventListener('click', function () {
+          tabs.forEach(function (item) { item.setAttribute('aria-selected', item === tab ? 'true' : 'false'); });
+          panels.forEach(function (panel) { panel.classList.toggle('active', panel.id === tab.dataset.tab + '-panel'); });
+        });
       });
+
+      var signupForm = document.querySelector('#signup-form');
+      var submit = signupForm && signupForm.querySelector('.submit');
+      var status = document.querySelector('#form-status');
+      if (signupForm && submit && status) {
+        signupForm.addEventListener('submit', function (event) {
+          event.preventDefault();
+          submit.disabled = true;
+          submit.textContent = 'Отправляем…';
+          status.textContent = '';
+          var data = new FormData(signupForm);
+          var endpoint = signupForm.action.replace('formsubmit.co/', 'formsubmit.co/ajax/');
+          fetch(endpoint, { method: 'POST', body: data, headers: { 'Accept': 'application/json' } })
+            .then(function (response) { if (!response.ok) throw new Error('send'); return response.json(); })
+            .then(function () { signupForm.reset(); submit.textContent = 'Заявка отправлена ✓'; status.textContent = 'Спасибо! Организатор получил вашу заявку.'; window.setTimeout(function () { submit.disabled = false; submit.textContent = 'Отправить заявку →'; }, 2800); })
+            .catch(function () { status.textContent = 'Открываем отправку заявки…'; signupForm.submit(); });
+        });
+      }
     })();
   </script>
 </body>
