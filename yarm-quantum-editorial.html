@@ -1,0 +1,483 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f1eee5">
+  <title>YARM — Quantum Editorial</title>
+  <meta name="description" content="YARM: данные, дашборды, Excel и обучение команд. Не декорируем хаос — превращаем его в решение.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --paper: #f1eee5;
+      --ink: #111115;
+      --signal: #334cff;
+      --acid: #ddff00;
+      --coral: #ff5f40;
+      --progress: 0;
+      --case-x: 0vw;
+      --mx: 50vw;
+      --my: 50vh;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      overflow-x: hidden;
+      color: var(--ink);
+      background: var(--paper);
+      font-family: Manrope, Arial, sans-serif;
+      cursor: none;
+      transition: background-color .65s cubic-bezier(.16,1,.3,1), color .65s cubic-bezier(.16,1,.3,1);
+    }
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      z-index: 50;
+      pointer-events: none;
+      opacity: .15;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.34'/%3E%3C/svg%3E");
+      mix-blend-mode: multiply;
+    }
+    ::selection { color: #111; background: var(--acid); }
+    a { color: inherit; text-decoration: none; }
+    button, input, textarea { font: inherit; }
+    button { color: inherit; }
+
+    .cursor {
+      position: fixed;
+      left: 0; top: 0;
+      z-index: 80;
+      width: 26px; height: 26px;
+      border-radius: 50%;
+      background: #fff;
+      pointer-events: none;
+      transform: translate(-50%,-50%);
+      mix-blend-mode: difference;
+      transition: width .2s, height .2s;
+    }
+    body.link-hover .cursor { width: 64px; height: 64px; }
+    .progress { position: fixed; left: 0; top: 0; z-index: 70; width: calc(var(--progress)*1%); height: 4px; background: var(--signal); }
+    .backword {
+      position: fixed;
+      left: 50%; top: 50%;
+      z-index: -1;
+      color: color-mix(in srgb, var(--ink) 4%, transparent);
+      font: 800 clamp(150px,28vw,550px)/.7 Manrope,sans-serif;
+      letter-spacing: -.1em;
+      text-transform: uppercase;
+      white-space: nowrap;
+      transform: translate(-50%,-50%) rotate(-7deg);
+      pointer-events: none;
+      transition: opacity .3s;
+    }
+
+    .header {
+      position: fixed;
+      left: 18px; right: 18px; top: 18px;
+      z-index: 60;
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      min-height: 52px;
+      padding: 0 17px;
+      border: 1px solid currentColor;
+      background: color-mix(in srgb, var(--paper) 82%, transparent);
+      backdrop-filter: blur(12px);
+      transition: background-color .65s, color .65s;
+    }
+    .logo { font-size: 22px; font-weight: 800; letter-spacing: -.07em; }
+    .header-center { justify-self: center; font: 500 10px/1 DM Mono,monospace; letter-spacing: .08em; text-transform: uppercase; }
+    .header-link { justify-self: end; display: inline-flex; align-items: center; gap: 9px; font: 500 10px/1 DM Mono,monospace; text-transform: uppercase; }
+    .header-link::after { content: "↗"; display: grid; place-items: center; width: 25px; height: 25px; border-radius: 50%; background: var(--signal); color: var(--paper); }
+
+    .section { position: relative; min-height: 100svh; padding: 112px 4vw 72px; isolation: isolate; }
+    .section-inner { width: min(1560px,100%); margin: auto; }
+    .kicker { display: flex; align-items: center; gap: 14px; font: 500 11px/1.3 DM Mono,monospace; letter-spacing: .08em; text-transform: uppercase; }
+    .kicker::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--signal); }
+    .micro { font: 400 11px/1.55 DM Mono,monospace; text-transform: uppercase; letter-spacing: .05em; }
+    .reveal { opacity: 0; transform: translateY(32px); transition: opacity .75s ease, transform .9s cubic-bezier(.16,1,.3,1); }
+    .is-active .reveal, .reveal.seen { opacity: 1; transform: none; }
+
+    .letters { display: block; }
+    .glyph {
+      display: inline-block;
+      opacity: 0;
+      filter: blur(var(--blur,8px));
+      transform: translate3d(var(--gx),var(--gy),0) rotate(var(--gr)) scale(var(--gs));
+      transform-origin: 50% 65%;
+      transition: transform 1.05s cubic-bezier(.16,1,.3,1), opacity .6s ease, filter .8s ease;
+      transition-delay: calc(var(--i)*25ms + 120ms);
+    }
+    .glyph.space { width: .25em; }
+    .is-active .glyph { opacity: 1; filter: blur(0); transform: none; }
+
+    .hero { min-height: 105svh; display: grid; align-items: end; overflow: hidden; }
+    .hero-grid { display: grid; grid-template-columns: 1fr 280px; gap: 4vw; align-items: end; }
+    .hero-title { margin: 0; font-size: clamp(65px,12.5vw,220px); font-weight: 800; line-height: .72; letter-spacing: -.09em; text-transform: uppercase; }
+    .hero-title .row { position: relative; display: block; width: max-content; max-width: 100%; }
+    .hero-title .row:nth-child(2) { margin-left: 11vw; color: var(--signal); }
+    .hero-title .row:nth-child(3) { color: transparent; -webkit-text-stroke: max(1px,.012em) var(--ink); }
+    .hero-side { align-self: stretch; display: flex; flex-direction: column; justify-content: flex-end; padding-bottom: 9px; }
+    .hero-side p { margin: 0 0 28px; font-size: 16px; line-height: 1.58; }
+    .arrow-link { display: inline-flex; align-items: center; justify-content: space-between; min-height: 58px; padding: 0 16px; border: 1px solid currentColor; font: 500 11px/1 DM Mono,monospace; text-transform: uppercase; transition: background .2s,color .2s; }
+    .arrow-link::after { content: "↓"; font-size: 21px; }
+    .arrow-link:hover { color: var(--paper); background: var(--ink); }
+    .hero-stamp { position: absolute; right: 4vw; top: 17%; width: 130px; aspect-ratio: 1; display: grid; place-items: center; border: 1px solid currentColor; border-radius: 50%; font: 500 9px/1.4 DM Mono,monospace; text-align: center; text-transform: uppercase; animation: stampSpin 18s linear infinite; }
+    .hero-stamp::before { content: "Y"; position: absolute; font: 800 48px/1 Manrope,sans-serif; animation: stampSpin 18s linear infinite reverse; }
+
+    .ticker { position: relative; z-index: 3; overflow: hidden; border-top: 1px solid currentColor; border-bottom: 1px solid currentColor; background: var(--acid); color: #111; transform: rotate(-1.4deg) scale(1.02); }
+    .ticker-track { display: flex; width: max-content; animation: ticker 24s linear infinite; }
+    .ticker span { padding: 16px 22px; font: 700 13px/1 DM Mono,monospace; text-transform: uppercase; white-space: nowrap; }
+    .ticker span::after { content: " ✦ "; margin-left: 38px; }
+
+    .thesis { display: grid; align-items: center; }
+    .thesis-grid { display: grid; grid-template-columns: 160px 1fr; gap: 6vw; }
+    .chapter { position: sticky; top: 115px; align-self: start; }
+    .chapter b { display: block; font-size: 64px; line-height: 1; letter-spacing: -.08em; }
+    .chapter span { display: block; margin-top: 10px; font: 500 10px/1.4 DM Mono,monospace; text-transform: uppercase; }
+    .thesis-copy { max-width: 1220px; }
+    .thesis-copy h2 { margin: 0; font-size: clamp(55px,9.1vw,154px); line-height: .9; letter-spacing: -.075em; text-transform: uppercase; }
+    .thesis-copy h2 em { color: var(--signal); font-style: normal; }
+    .thesis-note { display: grid; grid-template-columns: 1fr 1fr; gap: 5vw; margin: 60px 0 0 22%; padding-top: 22px; border-top: 1px solid currentColor; }
+    .thesis-note p { margin: 0; font-size: 17px; line-height: 1.65; }
+
+    .method { padding-bottom: 140px; }
+    .method-head { display: grid; grid-template-columns: .5fr 1fr; gap: 6vw; margin-bottom: 80px; align-items: end; }
+    .method-head h2 { margin: 0; font-size: clamp(60px,10vw,165px); line-height: .76; letter-spacing: -.09em; text-transform: uppercase; }
+    .method-head p { max-width: 500px; margin: 0 0 6px auto; font-size: 17px; line-height: 1.65; }
+    .verbs { border-top: 1px solid currentColor; }
+    .verb { position: relative; display: grid; grid-template-columns: 90px 1fr .65fr; align-items: center; min-height: 190px; border-bottom: 1px solid currentColor; overflow: hidden; }
+    .verb::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--signal); transform: scaleY(0); transform-origin: bottom; transition: transform .45s cubic-bezier(.16,1,.3,1); }
+    .verb:hover::before { transform: scaleY(1); }
+    .verb:hover { color: var(--paper); }
+    .verb-no { font: 500 11px/1 DM Mono,monospace; }
+    .verb strong { font-size: clamp(48px,7.4vw,120px); line-height: .78; letter-spacing: -.08em; text-transform: uppercase; }
+    .verb p { max-width: 470px; padding-left: 25px; margin: 0; font-size: 14px; line-height: 1.6; }
+
+    .cases { height: 360vh; padding: 0; background: #111115; color: #f6f2e9; }
+    .case-stage { position: sticky; top: 0; height: 100svh; overflow: hidden; }
+    .case-top { position: absolute; z-index: 5; top: 26px; left: 4vw; right: 4vw; display: flex; justify-content: space-between; color: #f6f2e9; }
+    .case-top .kicker::before { background: var(--acid); }
+    .case-dots { display: flex; align-items: center; gap: 7px; }
+    .case-dots i { display: block; width: 28px; height: 4px; background: rgba(255,255,255,.2); }
+    .case-dots i.active { background: var(--acid); }
+    .case-track { height: 100%; display: flex; width: 300vw; transform: translate3d(var(--case-x),0,0); will-change: transform; }
+    .case { position: relative; width: 100vw; flex: 0 0 100vw; min-width: 0; display: grid; grid-template-columns: .72fr 1fr; align-items: end; gap: 5vw; padding: 130px 5vw 5vw; overflow: hidden; }
+    .case:nth-child(1) { background: #111115; color: #f6f2e9; }.case:nth-child(2) { background: #334cff; color: #f6f2e9; }.case:nth-child(3) { background: #ff6546; color: #111115; }
+    .case-index { position: absolute; right: 1vw; top: 5%; opacity: .1; font-size: 42vw; font-weight: 800; line-height: 1; letter-spacing: -.13em; }
+    .case-copy { position: relative; z-index: 2; }
+    .case-label { font: 500 11px/1.4 DM Mono,monospace; text-transform: uppercase; }
+    .case h3 { margin: 24px 0; font-size: clamp(50px,7.5vw,126px); line-height: .83; letter-spacing: -.075em; text-transform: uppercase; }
+    .case p { max-width: 620px; margin: 0; font-size: 16px; line-height: 1.65; }
+    .case-metrics { position: relative; z-index: 2; display: grid; grid-template-columns: 1fr 1fr; border-top: 1px solid currentColor; border-bottom: 1px solid currentColor; }
+    .case-metric { min-height: 240px; padding: 20px; display: flex; flex-direction: column; justify-content: space-between; }
+    .case-metric + .case-metric { border-left: 1px solid currentColor; }
+    .case-metric strong { font-size: clamp(65px,10vw,160px); line-height: .8; letter-spacing: -.095em; }
+    .case-metric span { font: 500 10px/1.45 DM Mono,monospace; text-transform: uppercase; }
+    .scroll-hint { position: absolute; z-index: 8; right: 4vw; bottom: 24px; font: 500 9px/1 DM Mono,monospace; text-transform: uppercase; }
+
+    .offers { background: var(--acid); color: #111115; }
+    .offers-title { display: grid; grid-template-columns: 1fr .5fr; gap: 4vw; align-items: end; margin-bottom: 70px; }
+    .offers-title h2 { margin: 0; font-size: clamp(68px,11vw,185px); line-height: .74; letter-spacing: -.1em; text-transform: uppercase; }
+    .offers-title p { max-width: 430px; margin: 0; font-size: 16px; line-height: 1.6; }
+    .offer-list { border-top: 2px solid currentColor; }
+    .offer-row { position: relative; display: grid; grid-template-columns: 70px 1.1fr 1fr auto; gap: 3vw; align-items: center; min-height: 170px; border-bottom: 2px solid currentColor; }
+    .offer-row > * { position: relative; z-index: 1; }
+    .offer-row::before { content: ""; position: absolute; inset: 0; background: #111115; transform: scaleX(0); transform-origin: right; transition: transform .55s cubic-bezier(.16,1,.3,1); }
+    .offer-row:hover::before { transform: scaleX(1); transform-origin: left; }
+    .offer-row:hover { color: var(--acid); }
+    .offer-row b { font: 500 11px/1 DM Mono,monospace; }
+    .offer-row h3 { margin: 0; font-size: clamp(30px,4vw,67px); line-height: .9; letter-spacing: -.06em; text-transform: uppercase; }
+    .offer-row p { max-width: 430px; margin: 0; font-size: 14px; line-height: 1.55; }
+    .offer-row strong { font-size: clamp(25px,2.5vw,40px); letter-spacing: -.05em; white-space: nowrap; }
+
+    .contact { min-height: 115svh; background: #111115; color: #f4f0e7; overflow: hidden; }
+    .contact-grid { display: grid; grid-template-columns: 1.2fr .6fr; gap: 6vw; align-items: end; min-height: calc(100svh - 184px); }
+    .contact-title { margin: 0; font-size: clamp(67px,11.5vw,190px); font-weight: 800; line-height: .72; letter-spacing: -.095em; text-transform: uppercase; }
+    .contact-title .accent { color: var(--acid); }
+    .contact-side { border: 1px solid rgba(255,255,255,.4); padding: 27px; background: rgba(255,255,255,.025); }
+    .contact-side > p { margin: 0 0 30px; color: #c7c3ba; font-size: 15px; line-height: 1.65; }
+    .field { display: block; margin: 0 0 20px; }
+    .field span { display: block; margin-bottom: 8px; color: #aaa69d; font: 500 9px/1 DM Mono,monospace; text-transform: uppercase; }
+    .field input, .field textarea { width: 100%; padding: 11px 0; color: #f4f0e7; background: transparent; border: 0; border-bottom: 1px solid rgba(255,255,255,.35); border-radius: 0; outline: none; font-size: 16px; }
+    .field textarea { min-height: 83px; resize: vertical; }
+    .field input:focus, .field textarea:focus { border-color: var(--acid); }
+    .send { width: 100%; min-height: 60px; border: 0; background: var(--acid); color: #111; font: 600 11px/1 DM Mono,monospace; text-transform: uppercase; cursor: pointer; }
+    .send:hover { background: #fff; }
+    .demo-note { color: #77756f; font-size: 10px; line-height: 1.5; }
+    footer { position: absolute; bottom: 22px; left: 4vw; right: 4vw; display: flex; justify-content: space-between; font: 400 9px/1.4 DM Mono,monospace; text-transform: uppercase; color: #918e87; }
+
+    @keyframes ticker { to { transform: translateX(-50%); } }
+    @keyframes stampSpin { to { transform: rotate(360deg); } }
+
+    @media (max-width: 1000px) {
+      body { cursor: auto; }
+      .cursor { display: none; }
+      .hero-grid, .thesis-grid, .method-head, .offers-title, .contact-grid { grid-template-columns: 1fr; }
+      .hero-side { max-width: 480px; margin: 40px 0 0 auto; }
+      .thesis-grid { gap: 40px; }
+      .chapter { position: static; }
+      .thesis-note { margin-left: 10%; }
+      .method-head p { margin: 25px 0 0 auto; }
+      .verb { grid-template-columns: 60px 1fr; padding-block: 28px; }
+      .verb p { grid-column: 2; padding: 20px 0 0; }
+      .case { grid-template-columns: 1fr; align-content: end; }
+      .case-metrics { max-width: 780px; }
+      .offer-row { grid-template-columns: 55px 1fr auto; padding: 28px 0; }
+      .offer-row p { grid-column: 2 / -1; }
+    }
+    @media (max-width: 700px) {
+      .header { left: 10px; right: 10px; top: 10px; min-height: 48px; grid-template-columns: 1fr auto; }
+      .header-center { display: none; }
+      .section { padding: 92px 20px 60px; }
+      .hero { min-height: 100svh; padding-bottom: 40px; }
+      .hero-title { font-size: clamp(56px,18vw,92px); line-height: .77; }
+      .hero-title .row:nth-child(2) { margin-left: 0; }
+      .hero-side { margin-top: 36px; }
+      .hero-stamp { width: 78px; top: 15%; right: 18px; opacity: .75; }.hero-stamp::before { font-size: 32px; }
+      .thesis-copy h2 { font-size: clamp(48px,15vw,78px); }
+      .thesis-note { grid-template-columns: 1fr; margin: 40px 0 0; }
+      .method { padding-bottom: 80px; }
+      .method-head { margin-bottom: 45px; }.method-head h2 { font-size: 64px; }
+      .verb { min-height: 150px; grid-template-columns: 40px 1fr; }.verb strong { font-size: 49px; }.verb p { font-size: 13px; }
+      .cases { height: auto; padding: 0; }
+      .case-stage { position: relative; height: auto; overflow: visible; }
+      .case-top { position: sticky; top: 68px; padding: 14px 0; background: #111115; }
+      .case-track { width: auto; height: auto; display: block; transform: none !important; }
+      .case { width: 100%; min-height: 100svh; padding: 115px 20px 55px; }
+      .case h3 { font-size: 54px; }
+      .case-metric { min-height: 170px; padding: 14px; }.case-metric strong { font-size: 62px; }
+      .scroll-hint { display: none; }
+      .offers-title h2 { font-size: 74px; }
+      .offer-row { grid-template-columns: 37px 1fr; gap: 15px; min-height: 0; }
+      .offer-row h3 { font-size: 38px; }.offer-row p, .offer-row strong { grid-column: 2; }.offer-row strong { padding-top: 8px; }
+      .contact { padding-bottom: 100px; }.contact-grid { min-height: auto; }
+      .contact-title { font-size: clamp(58px,17.7vw,91px); margin-bottom: 55px; }
+      .contact-side { padding: 22px 18px; }
+      footer { left: 20px; right: 20px; flex-direction: column; gap: 8px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      *,*::before,*::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; }
+      .glyph,.reveal { opacity: 1 !important; filter: none !important; transform: none !important; transition: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="cursor" aria-hidden="true"></div>
+  <div class="progress" aria-hidden="true"></div>
+  <div class="backword" aria-hidden="true">CHAOS</div>
+
+  <header class="header">
+    <a class="logo interactive" href="#home">YARM</a>
+    <div class="header-center">Ideas → systems → decisions</div>
+    <a class="header-link interactive" href="#contact">Начать проект</a>
+  </header>
+
+  <main>
+    <section class="section hero" id="home" data-paper="#f1eee5" data-ink="#111115" data-signal="#334cff" data-word="CHAOS">
+      <div class="section-inner hero-grid">
+        <h1 class="hero-title" aria-label="Не дашборд. Рентген бизнеса.">
+          <span class="row letters">Не дашборд.</span>
+          <span class="row letters">Рентген</span>
+          <span class="row letters">бизнеса.</span>
+        </h1>
+        <div class="hero-side reveal">
+          <p>Ваши данные уже знают, где вы теряете время. Я заставляю их признаться — и превращаю ответ в систему.</p>
+          <a class="arrow-link interactive" href="#thesis">Начать расследование</a>
+        </div>
+        <div class="hero-stamp" aria-hidden="true">Data with<br>something<br>to say</div>
+      </div>
+    </section>
+
+    <div class="ticker" aria-hidden="true">
+      <div class="ticker-track">
+        <span>Excel без ручного труда</span><span>Дашборд без лишнего шума</span><span>Обучение без сухой теории</span><span>Данные, которые ведут к решению</span>
+        <span>Excel без ручного труда</span><span>Дашборд без лишнего шума</span><span>Обучение без сухой теории</span><span>Данные, которые ведут к решению</span>
+      </div>
+    </div>
+
+    <section class="section thesis" id="thesis" data-paper="#f1eee5" data-ink="#111115" data-signal="#ff5f40" data-word="TRUTH">
+      <div class="section-inner thesis-grid">
+        <aside class="chapter reveal"><b>01</b><span>Почему<br>это важно</span></aside>
+        <div class="thesis-copy">
+          <div class="kicker reveal">Неприятная правда</div>
+          <h2><span class="letters">Пока человек сводит отчёт — бизнес уже</span><em class="letters">изменился.</em></h2>
+          <div class="thesis-note reveal"><p>Решение опаздывает не потому, что мало данных. Их слишком много, они разбросаны и говорят на разных языках.</p><p>Поэтому я не рисую красивые таблицы. Я сокращаю расстояние между событием и решением.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section method" id="method" data-paper="#e7e9ff" data-ink="#111115" data-signal="#334cff" data-word="LOGIC">
+      <div class="section-inner">
+        <div class="method-head">
+          <div><div class="kicker reveal">Четыре движения</div><h2><span class="letters">Как</span><span class="letters">я думаю</span></h2></div>
+          <p class="reveal">Инструменты меняются. Способ мышления остаётся: найти реальную боль, проверить логику, убрать лишнее и передать управление команде.</p>
+        </div>
+        <div class="verbs">
+          <div class="verb reveal interactive"><span class="verb-no">01</span><strong>Нахожу</strong><p>Шаг, где теряется время. Число, которому нельзя верить. Вопрос, на который отчёт не отвечает.</p></div>
+          <div class="verb reveal interactive"><span class="verb-no">02</span><strong>Проверяю</strong><p>Источники, правила и роли. До тех пор, пока логика не выдержит неудобный вопрос.</p></div>
+          <div class="verb reveal interactive"><span class="verb-no">03</span><strong>Собираю</strong><p>Одну прозрачную модель вместо множества версий правды и ручных мостов между файлами.</p></div>
+          <div class="verb reveal interactive"><span class="verb-no">04</span><strong>Обучаю</strong><p>Чтобы завтра команда могла повторить результат сама — без создателя и без магии.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="cases" id="cases" data-paper="#111115" data-ink="#f6f2e9" data-signal="#ddff00" data-word="PROOF">
+      <div class="case-stage">
+        <div class="case-top"><div class="kicker">Не обещания. Доказательства.</div><div class="case-dots"><i class="active"></i><i></i><i></i></div></div>
+        <div class="case-track">
+          <article class="case">
+            <span class="case-index">1</span>
+            <div class="case-copy"><span class="case-label">01 / Retail / Executive dashboard</span><h3>Скорость вернулась.</h3><p>Двенадцать разрозненных файлов стали одной моделью, которую руководитель обновляет за секунды.</p></div>
+            <div class="case-metrics"><div class="case-metric"><strong>2ч</strong><span>было на отчёт</span></div><div class="case-metric"><strong>30с</strong><span>стало на обновление</span></div></div>
+          </article>
+          <article class="case">
+            <span class="case-index">2</span>
+            <div class="case-copy"><span class="case-label">02 / Production / Power Query</span><h3>Ручной труд исчез.</h3><p>Четыре источника связаны в устойчивый процесс. Свод больше не зависит от памяти одного человека.</p></div>
+            <div class="case-metrics"><div class="case-metric"><strong>4→1</strong><span>источники в модели</span></div><div class="case-metric"><strong>0</strong><span>ручных сводов</span></div></div>
+          </article>
+          <article class="case">
+            <span class="case-index">3</span>
+            <div class="case-copy"><span class="case-label">03 / Education / Team upgrade</span><h3>Знание осталось.</h3><p>Команда училась на своих задачах и собрала инструменты, которыми продолжила пользоваться после программы.</p></div>
+            <div class="case-metrics"><div class="case-metric"><strong>8</strong><span>людей в команде</span></div><div class="case-metric"><strong>6</strong><span>недель практики</span></div></div>
+          </article>
+        </div>
+        <div class="scroll-hint">Прокрутите, чтобы пройти кейсы →</div>
+      </div>
+    </section>
+
+    <section class="section offers" id="offers" data-paper="#ddff00" data-ink="#111115" data-signal="#334cff" data-word="VALUE">
+      <div class="section-inner">
+        <div class="offers-title">
+          <div><div class="kicker reveal">Точка входа</div><h2><span class="letters">Выберите</span><span class="letters">масштаб.</span></h2></div>
+          <p class="reveal">Можно начать с одного неудобного файла. Можно сразу перестроить процесс. В обоих случаях сначала появится ясность.</p>
+        </div>
+        <div class="offer-list reveal">
+          <article class="offer-row interactive"><b>01</b><h3>Аудит файла</h3><p>Ошибки, узкие места и карта улучшений с приоритетами.</p><strong>от 8 000 ₽</strong></article>
+          <article class="offer-row interactive"><b>02</b><h3>Дашборд</h3><p>Модель, автоматическое обновление и интерфейс для решения.</p><strong>от 45 000 ₽</strong></article>
+          <article class="offer-row interactive"><b>03</b><h3>Обучение</h3><p>Практика на ваших задачах — до самостоятельного результата.</p><strong>от 25 000 ₽</strong></article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section contact" id="contact" data-paper="#111115" data-ink="#f4f0e7" data-signal="#ddff00" data-word="START">
+      <div class="section-inner contact-grid">
+        <h2 class="contact-title" aria-label="Пришлите самый неудобный файл."><span class="letters">Пришлите</span><span class="letters accent">самый</span><span class="letters">неудобный</span><span class="letters">файл.</span></h2>
+        <form class="contact-side reveal" id="contactForm">
+          <p>Именно с него обычно начинается лучшая система. Опишите задачу — отвечу, что можно изменить и с какого шага начать.</p>
+          <label class="field"><span>Имя</span><input name="name" autocomplete="name" placeholder="Как к вам обращаться" required></label>
+          <label class="field"><span>Контакт</span><input name="contact" placeholder="Telegram или email" required></label>
+          <label class="field"><span>Что происходит сейчас</span><textarea name="problem" placeholder="Каждую неделю мы вручную…" required></textarea></label>
+          <button class="send interactive" type="submit">Отправить неудобную правду ↗</button>
+          <p class="demo-note">Демо-форма: подключите отправку в Telegram, почту или CRM.</p>
+        </form>
+      </div>
+      <footer><span>YARM © 2026 / QUANTUM EDITORIAL</span><span>Excel · Data · Education</span></footer>
+    </section>
+  </main>
+
+  <script>
+    (() => {
+      const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const root = document.documentElement;
+      const body = document.body;
+      const theme = document.querySelector('meta[name="theme-color"]');
+      const backword = document.querySelector('.backword');
+
+      document.querySelectorAll('.letters').forEach((el, group) => {
+        const text = el.textContent;
+        if (!el.closest('[aria-label]')) el.setAttribute('aria-label', text.trim().replace(/\s+/g,' '));
+        const frag = document.createDocumentFragment();
+        [...text].forEach((ch, i) => {
+          const glyph = document.createElement('span');
+          glyph.className = 'glyph' + (/\s/.test(ch) ? ' space' : '');
+          glyph.setAttribute('aria-hidden','true');
+          glyph.textContent = /\s/.test(ch) ? '\u00a0' : ch;
+          const mode = (i + group * 3) % 6;
+          const vectors = [[0,90,-8,.65],[65,0,12,.82],[-55,40,-15,.72],[0,-70,7,.88],[35,75,18,.7],[-25,-55,-10,.78]];
+          const [x,y,r,s] = vectors[mode];
+          glyph.style.setProperty('--i',i);
+          glyph.style.setProperty('--gx',`${x}px`);
+          glyph.style.setProperty('--gy',`${y}px`);
+          glyph.style.setProperty('--gr',`${r}deg`);
+          glyph.style.setProperty('--gs',s);
+          glyph.style.setProperty('--blur',`${4 + mode*1.5}px`);
+          frag.appendChild(glyph);
+        });
+        el.replaceChildren(frag);
+      });
+
+      const sections = [...document.querySelectorAll('[data-paper]')];
+      const sectionObserver = new IntersectionObserver(entries => {
+        entries.forEach(entry => {
+          if (!entry.isIntersecting) return;
+          const el = entry.target;
+          sections.forEach(s => s.classList.toggle('is-active',s === el));
+          root.style.setProperty('--paper',el.dataset.paper);
+          root.style.setProperty('--ink',el.dataset.ink);
+          root.style.setProperty('--signal',el.dataset.signal);
+          theme.setAttribute('content',el.dataset.paper);
+          backword.style.opacity = '0';
+          setTimeout(() => { backword.textContent = el.dataset.word; backword.style.opacity = '1'; }, 170);
+        });
+      }, { threshold:.28 });
+      sections.forEach(el => sectionObserver.observe(el));
+
+      const revealObserver = new IntersectionObserver(entries => entries.forEach(entry => {
+        if (entry.isIntersecting) { entry.target.classList.add('seen'); revealObserver.unobserve(entry.target); }
+      }), { threshold:.12 });
+      document.querySelectorAll('.reveal').forEach(el => revealObserver.observe(el));
+
+      const cursor = document.querySelector('.cursor');
+      let mx = innerWidth/2, my = innerHeight/2, cx = mx, cy = my;
+      addEventListener('pointermove', e => { mx=e.clientX; my=e.clientY; root.style.setProperty('--mx',`${mx}px`); root.style.setProperty('--my',`${my}px`); }, {passive:true});
+      document.querySelectorAll('.interactive').forEach(el => {
+        el.addEventListener('pointerenter',()=>body.classList.add('link-hover'));
+        el.addEventListener('pointerleave',()=>body.classList.remove('link-hover'));
+      });
+      const cursorLoop = () => { cx += (mx-cx)*.19; cy += (my-cy)*.19; cursor.style.transform=`translate(${cx}px,${cy}px) translate(-50%,-50%)`; requestAnimationFrame(cursorLoop); };
+      if (!reduced) cursorLoop();
+
+      const cases = document.querySelector('.cases');
+      const dots = [...document.querySelectorAll('.case-dots i')];
+      let ticking = false;
+      function updateScroll() {
+        const max = document.documentElement.scrollHeight-innerHeight;
+        root.style.setProperty('--progress',max ? (scrollY/max*100).toFixed(2):0);
+        if (innerWidth > 700) {
+          const rect = cases.getBoundingClientRect();
+          const travel = cases.offsetHeight-innerHeight;
+          const p = Math.min(1,Math.max(0,-rect.top/travel));
+          root.style.setProperty('--case-x',`${(-p*200).toFixed(3)}vw`);
+          const active = Math.min(2,Math.floor(p*3));
+          dots.forEach((dot,i)=>dot.classList.toggle('active',i===active));
+        }
+        ticking=false;
+      }
+      addEventListener('scroll',()=>{ if(!ticking){requestAnimationFrame(updateScroll);ticking=true;} },{passive:true});
+      addEventListener('resize',updateScroll); updateScroll();
+
+      if (!reduced) {
+        const hero = document.querySelector('.hero-title');
+        addEventListener('pointermove', e => {
+          if (innerWidth < 800) return;
+          hero.style.transform = `translate(${(e.clientX/innerWidth-.5)*-10}px,${(e.clientY/innerHeight-.5)*-8}px)`;
+        }, {passive:true});
+      }
+
+      document.getElementById('contactForm').addEventListener('submit', e => {
+        e.preventDefault();
+        const button = e.currentTarget.querySelector('button');
+        const original = button.textContent;
+        button.textContent = 'Правда принята ✓'; button.disabled = true;
+        setTimeout(()=>{ button.textContent=original; button.disabled=false; e.currentTarget.reset(); },2200);
+      });
+    })();
+  </script>
+</body>
+</html>
