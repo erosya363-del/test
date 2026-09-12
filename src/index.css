@@ -80,8 +80,7 @@
 }
 
 .animate-letter-pop {
-  animation: letter-pop 0.4s ease-out forwards;
-  opacity: 0;
+  animation: letter-pop 0.4s ease-out both;
   position: relative;
 }
 
@@ -129,12 +128,13 @@
 }
 
 .word-card-showing {
+  width: 100%;
   background: linear-gradient(135deg, rgba(250, 204, 21, 0.08) 0%, rgba(251, 146, 60, 0.08) 100%);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border: 2px solid rgba(250, 204, 21, 0.25);
   border-radius: 24px;
-  padding: 32px 48px;
+  padding: 1.7rem 1.2rem;
   text-align: center;
   animation: glow-yellow 3s ease-in-out infinite;
   position: relative;
@@ -153,23 +153,25 @@
 }
 
 .word-card-guessing {
+  width: 100%;
   background: linear-gradient(135deg, rgba(147, 51, 234, 0.08) 0%, rgba(79, 70, 229, 0.08) 100%);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border: 2px solid rgba(147, 51, 234, 0.25);
   border-radius: 24px;
-  padding: 32px 48px;
+  padding: 1.7rem 1.2rem;
   text-align: center;
   animation: glow-purple 3s ease-in-out infinite;
 }
 
 .word-card-fixing {
+  width: 100%;
   background: linear-gradient(135deg, rgba(251, 146, 60, 0.08) 0%, rgba(239, 68, 68, 0.08) 100%);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border: 2px solid rgba(251, 146, 60, 0.25);
   border-radius: 24px;
-  padding: 24px 32px;
+  padding: 1.4rem 1rem;
   text-align: center;
   animation: glow-orange 3s ease-in-out infinite;
 }
@@ -184,8 +186,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 2.5rem;
-  height: 3.5rem;
+  min-width: 2.85rem;
+  height: 3.9rem;
   padding: 0 0.5rem;
   background: rgba(255, 255, 255, 0.1);
   border: 2px solid rgba(255, 255, 255, 0.2);
@@ -212,8 +214,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 2.5rem;
-  height: 3.5rem;
+  min-width: 2.85rem;
+  height: 3.9rem;
   padding: 0 0.5rem;
   background: rgba(255, 255, 255, 0.05);
   border: 2px solid rgba(255, 255, 255, 0.15);
@@ -496,6 +498,129 @@ body,
 
 .app-screen-hud {
   padding-top: calc(5.5rem + env(safe-area-inset-top, 0px));
+}
+
+.play-stage {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  max-width: 28rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 0.85rem;
+}
+
+.play-hero {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.85rem;
+}
+
+.play-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  border: 1px solid;
+  border-radius: 999px;
+  padding: 0.7rem 1rem;
+  font-size: 1.15rem;
+  font-weight: 800;
+}
+
+.play-hint {
+  margin-top: 0.6rem;
+  width: 100%;
+  text-align: center;
+  background: rgba(59, 130, 246, 0.2);
+  border: 1px solid rgba(96, 165, 250, 0.45);
+  border-radius: 1rem;
+  padding: 0.7rem 0.9rem;
+  color: #bfdbfe;
+  font-size: 1.05rem;
+  font-weight: 800;
+}
+
+.play-emoji {
+  font-size: 4.4rem;
+  line-height: 1;
+}
+
+.play-word {
+  font-size: clamp(2.15rem, 8.5vw, 3.45rem);
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  color: #fff;
+  line-height: 1.15;
+  word-break: break-word;
+}
+
+.play-letters {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.35rem;
+  font-size: clamp(1.85rem, 6.5vw, 2.7rem);
+  font-weight: 900;
+  color: #fff;
+}
+
+.play-cta,
+.play-choice {
+  width: 100%;
+  font-size: 1.2rem;
+  padding: 1.05rem 1.25rem;
+}
+
+.play-choice-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  width: 100%;
+}
+
+.play-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  width: 100%;
+}
+
+.play-hint-btn {
+  width: 100%;
+  font-size: 1.05rem;
+  padding: 0.85rem 1rem;
+}
+
+.play-options {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.play-tip {
+  text-align: center;
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.play-title {
+  font-size: 2.15rem;
+  font-weight: 900;
+}
+
+.play-money {
+  font-size: 1.85rem;
+  font-weight: 900;
 }
 
 .app-hud {

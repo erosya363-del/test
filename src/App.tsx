@@ -281,6 +281,191 @@ const WORDS: WordData[] = [
     { wrong: `Собака`, errorType: 'stress', stressHint: 'Ударение не там' },
     { wrong: `Соба${a}ка`, errorType: 'none' },
   ]},
+  { correct: `арбу${a}з`, correctPlain: 'арбуз', emoji: '🍉', errors: [
+    { wrong: `арбу${a}с`, errorType: 'letter', letterHint: 'Последняя буква' },
+    { wrong: `арбуз`, errorType: 'stress', stressHint: 'Ударение не там' },
+    { wrong: `арбу${a}з`, errorType: 'none' },
+  ]},
+  { correct: `ве${a}село`, correctPlain: 'весело', emoji: '😄', errors: [
+    { wrong: `ви${a}село`, errorType: 'letter', letterHint: 'Вторая буква' },
+    { wrong: `весело`, errorType: 'stress', stressHint: 'Ударение не там' },
+    { wrong: `ве${a}село`, errorType: 'none' },
+  ]},
+  { correct: `воробе${a}й`, correctPlain: 'воробей', emoji: '🐦', errors: [
+    { wrong: `ворабе${a}й`, errorType: 'letter', letterHint: 'Третья буква' },
+    { wrong: `воробей`, errorType: 'stress', stressHint: 'Ударение не там' },
+    { wrong: `воробе${a}й`, errorType: 'none' },
+  ]},
+  { correct: `воро${a}на`, correctPlain: 'ворона', emoji: '🐦‍⬛', errors: [
+    { wrong: `варо${a}на`, errorType: 'letter', letterHint: 'Вторая буква' },
+    { wrong: `ворона`, errorType: 'stress', stressHint: 'Ударение не там' },
+    { wrong: `воро${a}на`, errorType: 'none' },
+  ]},
+  { correct: `де${a}вочка`, correctPlain: 'девочка', emoji: '👧', errors: [
+    { wrong: `ди${a}вочка`, errorType: 'letter', letterHint: 'Вторая буква' },
+    { wrong: `девочка`, errorType: 'stress', stressHint: 'Ударение не там' },
+    { wrong: `де${a}вочка`, errorType: 'none' },
+  ]},
+  { correct: `дежу${a}рный`, correctPlain: 'дежурный', emoji: '🪪', errors: [
+    { wrong: `дижу${a}рный`, errorType: 'letter', letterHint: 'Вторая буква' },
+    { wrong: `дежурный`, errorType: 'stress', stressHint: 'Ударение не там' },
+    { wrong: `дежу${a}рный`, errorType: 'none' },
+  ]},
+  { correct: `дере${a}вня`, correctPlain: 'деревня', emoji: '🏡', errors: [
+    { wrong: `дири${a}вня`, errorType: 'letter', letterHint: 'Вторая буква' },
+    { wrong: `деревня`, errorType: 'stress', stressHint: 'Ударение не там' },
+    { wrong: `дере${a}вня`, errorType: 'none' },
+  ]},
+  { correct: `каранда${a}ш`, correctPlain: 'карандаш', emoji: '✏️', errors: [
+    { wrong: `каранда${a}ж`, errorType: 'letter', letterHint: 'Последняя буква' },
+    { wrong: `карандаш`, errorType: 'stress', stressHint: 'Ударение не там' },
+    { wrong: `каранда${a}ш`, errorType: 'none' },
+  ]},
+  { correct: `кла${a}сс`, correctPlain: 'класс', emoji: '🧑‍🏫', errors: [
+    { wrong: `кла${a}с`, errorType: 'letter', letterHint: 'Пропущена буква' },
+    { wrong: `класс`, errorType: 'stress', stressHint: 'Ударение не там' },
+    { wrong: `кла${a}сс`, errorType: 'none' },
+  ]},
+  { correct: `ладо${a}нь`, correctPlain: 'ладонь', emoji: '🖐️', errors: [
+    { wrong: `лодо${a}нь`, errorType: 'letter', letterHint: 'Вторая буква' },
+    { wrong: `ладонь`, errorType: 'stress', stressHint: 'Ударение не там' },
+    { wrong: `ладо${a}нь`, errorType: 'none' },
+  ]},
+  { correct: `лиси${a}ца`, correctPlain: 'лисица', emoji: '🦊', errors: [
+    { wrong: `леси${a}ца`, errorType: 'letter', letterHint: 'Вторая буква' },
+    { wrong: `лисица`, errorType: 'stress', stressHint: 'Ударение не там' },
+    { wrong: `лиси${a}ца`, errorType: 'none' },
+  ]},
+  { correct: `ма${a}льчик`, correctPlain: 'мальчик', emoji: '👦', errors: [
+    { wrong: `мо${a}льчик`, errorType: 'letter', letterHint: 'Вторая буква' },
+    { wrong: `мальчик`, errorType: 'stress', stressHint: 'Ударение не там' },
+    { wrong: `ма${a}льчик`, errorType: 'none' },
+  ]},
+  { correct: `маши${a}на`, correctPlain: 'машина', emoji: '🚗', errors: [
+    { wrong: `моши${a}на`, errorType: 'letter', letterHint: 'Вторая буква' },
+    { wrong: `машина`, errorType: 'stress', stressHint: 'Ударение не там' },
+    { wrong: `маши${a}на`, errorType: 'none' },
+  ]},
+  { correct: `медве${a}дь`, correctPlain: 'медведь', emoji: '🐻', errors: [
+    { wrong: `мидве${a}дь`, errorType: 'letter', letterHint: 'Вторая буква' },
+    { wrong: `медведь`, errorType: 'stress', stressHint: 'Ударение не там' },
+    { wrong: `медве${a}дь`, errorType: 'none' },
+  ]},
+  { correct: `пальто${a}`, correctPlain: 'пальто', emoji: '🧥', errors: [
+    { wrong: `полто${a}`, errorType: 'letter', letterHint: 'Пропущена буква' },
+    { wrong: `пальто`, errorType: 'stress', stressHint: 'Ударение не там' },
+    { wrong: `пальто${a}`, errorType: 'none' },
+  ]},
+  { correct: `пена${a}л`, correctPlain: 'пенал', emoji: '🖊️', errors: [
+    { wrong: `пина${a}л`, errorType: 'letter', letterHint: 'Вторая буква' },
+    { wrong: `пенал`, errorType: 'stress', stressHint: 'Ударение не там' },
+    { wrong: `пена${a}л`, errorType: 'none' },
+  ]},
+  { correct: `пету${a}х`, correctPlain: 'петух', emoji: '🐓', errors: [
+    { wrong: `питу${a}х`, errorType: 'letter', letterHint: 'Вторая буква' },
+    { wrong: `петух`, errorType: 'stress', stressHint: 'Ударение не там' },
+    { wrong: `пету${a}х`, errorType: 'none' },
+  ]},
+  { correct: `рабо${a}та`, correctPlain: 'работа', emoji: '💼', errors: [
+    { wrong: `роба${a}та`, errorType: 'letter', letterHint: 'Вторая буква' },
+    { wrong: `работа`, errorType: 'stress', stressHint: 'Ударение не там' },
+    { wrong: `рабо${a}та`, errorType: 'none' },
+  ]},
+  { correct: `рабо${a}тать`, correctPlain: 'работать', emoji: '🛠️', errors: [
+    { wrong: `роба${a}тать`, errorType: 'letter', letterHint: 'Вторая буква' },
+    { wrong: `работать`, errorType: 'stress', stressHint: 'Ударение не там' },
+    { wrong: `рабо${a}тать`, errorType: 'none' },
+  ]},
+  { correct: `ребя${a}та`, correctPlain: 'ребята', emoji: '🧒', errors: [
+    { wrong: `рибя${a}та`, errorType: 'letter', letterHint: 'Вторая буква' },
+    { wrong: `ребята`, errorType: 'stress', stressHint: 'Ударение не там' },
+    { wrong: `ребя${a}та`, errorType: 'none' },
+  ]},
+  { correct: `ру${a}сский`, correctPlain: 'русский', emoji: '📘', errors: [
+    { wrong: `ру${a}ский`, errorType: 'letter', letterHint: 'Пропущена буква' },
+    { wrong: `русский`, errorType: 'stress', stressHint: 'Ударение не там' },
+    { wrong: `ру${a}сский`, errorType: 'none' },
+  ]},
+  { correct: `солове${a}й`, correctPlain: 'соловей', emoji: '🎶', errors: [
+    { wrong: `салаве${a}й`, errorType: 'letter', letterHint: 'Вторая буква' },
+    { wrong: `соловей`, errorType: 'stress', stressHint: 'Ударение не там' },
+    { wrong: `солове${a}й`, errorType: 'none' },
+  ]},
+  { correct: `соро${a}ка`, correctPlain: 'сорока', emoji: '🐦', errors: [
+    { wrong: `сара${a}ка`, errorType: 'letter', letterHint: 'Вторая буква' },
+    { wrong: `сорока`, errorType: 'stress', stressHint: 'Ударение не там' },
+    { wrong: `соро${a}ка`, errorType: 'none' },
+  ]},
+  { correct: `тетра${a}дь`, correctPlain: 'тетрадь', emoji: '📓', errors: [
+    { wrong: `титра${a}дь`, errorType: 'letter', letterHint: 'Вторая буква' },
+    { wrong: `тетрадь`, errorType: 'stress', stressHint: 'Ударение не там' },
+    { wrong: `тетра${a}дь`, errorType: 'none' },
+  ]},
+  { correct: `учени${a}к`, correctPlain: 'ученик', emoji: '🎒', errors: [
+    { wrong: `учини${a}к`, errorType: 'letter', letterHint: 'Третья буква' },
+    { wrong: `ученик`, errorType: 'stress', stressHint: 'Ударение не там' },
+    { wrong: `учени${a}к`, errorType: 'none' },
+  ]},
+  { correct: `учени${a}ца`, correctPlain: 'ученица', emoji: '🎒', errors: [
+    { wrong: `учини${a}ца`, errorType: 'letter', letterHint: 'Третья буква' },
+    { wrong: `ученица`, errorType: 'stress', stressHint: 'Ударение не там' },
+    { wrong: `учени${a}ца`, errorType: 'none' },
+  ]},
+  { correct: `учи${a}тель`, correctPlain: 'учитель', emoji: '👨‍🏫', errors: [
+    { wrong: `уче${a}тель`, errorType: 'letter', letterHint: 'Третья буква' },
+    { wrong: `учитель`, errorType: 'stress', stressHint: 'Ударение не там' },
+    { wrong: `учи${a}тель`, errorType: 'none' },
+  ]},
+  { correct: `хорошо${a}`, correctPlain: 'хорошо', emoji: '👍', errors: [
+    { wrong: `харашо${a}`, errorType: 'letter', letterHint: 'Вторая буква' },
+    { wrong: `хорошо`, errorType: 'stress', stressHint: 'Ударение не там' },
+    { wrong: `хорошо${a}`, errorType: 'none' },
+  ]},
+  { correct: `язы${a}к`, correctPlain: 'язык', emoji: '👅', errors: [
+    { wrong: `изы${a}к`, errorType: 'letter', letterHint: 'Первая буква' },
+    { wrong: `язык`, errorType: 'stress', stressHint: 'Ударение не там' },
+    { wrong: `язы${a}к`, errorType: 'none' },
+  ]},
+  { correct: `а${a}дрес`, correctPlain: 'адрес', emoji: '📫', errors: [
+    { wrong: `о${a}дрес`, errorType: 'letter', letterHint: 'Первая буква' },
+    { wrong: `адрес`, errorType: 'stress', stressHint: 'Ударение не там' },
+    { wrong: `а${a}дрес`, errorType: 'none' },
+  ]},
+  { correct: `рису${a}нок`, correctPlain: 'рисунок', emoji: '🎨', errors: [
+    { wrong: `рису${a}нак`, errorType: 'letter', letterHint: 'Последняя буква' },
+    { wrong: `рисунок`, errorType: 'stress', stressHint: 'Ударение не там' },
+    { wrong: `рису${a}нок`, errorType: 'none' },
+  ]},
+  { correct: `спаси${a}бо`, correctPlain: 'спасибо', emoji: '🙏', errors: [
+    { wrong: `споси${a}бо`, errorType: 'letter', letterHint: 'Вторая буква' },
+    { wrong: `спасибо`, errorType: 'stress', stressHint: 'Ударение не там' },
+    { wrong: `спаси${a}бо`, errorType: 'none' },
+  ]},
+  { correct: `до свида${a}ния`, correctPlain: 'до свидания', emoji: '👋', errors: [
+    { wrong: `да свида${a}ния`, errorType: 'letter', letterHint: 'Вторая буква' },
+    { wrong: `до свидания`, errorType: 'stress', stressHint: 'Ударение не там' },
+    { wrong: `до свида${a}ния`, errorType: 'none' },
+  ]},
+  { correct: `карти${a}на`, correctPlain: 'картина', emoji: '🖼️', errors: [
+    { wrong: `корти${a}на`, errorType: 'letter', letterHint: 'Вторая буква' },
+    { wrong: `картина`, errorType: 'stress', stressHint: 'Ударение не там' },
+    { wrong: `карти${a}на`, errorType: 'none' },
+  ]},
+  { correct: `пожа${a}луйста`, correctPlain: 'пожалуйста', emoji: '🤲', errors: [
+    { wrong: `пожа${a}луста`, errorType: 'letter', letterHint: 'Пропущена буква' },
+    { wrong: `пожалуйста`, errorType: 'stress', stressHint: 'Ударение не там' },
+    { wrong: `пожа${a}луйста`, errorType: 'none' },
+  ]},
+  { correct: `фами${a}лия`, correctPlain: 'фамилия', emoji: '🪪', errors: [
+    { wrong: `фоми${a}лия`, errorType: 'letter', letterHint: 'Вторая буква' },
+    { wrong: `фамилия`, errorType: 'stress', stressHint: 'Ударение не там' },
+    { wrong: `фами${a}лия`, errorType: 'none' },
+  ]},
+  { correct: `учи${a}тельница`, correctPlain: 'учительница', emoji: '👩‍🏫', errors: [
+    { wrong: `уче${a}тельница`, errorType: 'letter', letterHint: 'Третья буква' },
+    { wrong: `учительница`, errorType: 'stress', stressHint: 'Ударение не там' },
+    { wrong: `учи${a}тельница`, errorType: 'none' },
+  ]},
 ];
 
 type GameState = 'splash' | 'menu' | 'shop' | 'showing' | 'guessing' | 'fixing' | 'result' | 'final';
@@ -338,11 +523,7 @@ function App() {
       const j = Math.floor(Math.random() * (i + 1));
       [baseOrder[i], baseOrder[j]] = [baseOrder[j], baseOrder[i]];
     }
-    const result = [...baseOrder];
-    while (result.length < 50) {
-      result.push(Math.floor(Math.random() * WORDS.length));
-    }
-    return result;
+    return baseOrder.slice(0, Math.min(50, baseOrder.length));
   }, []);
 
   const startGame = () => {
@@ -723,8 +904,8 @@ function App() {
                 Диктант Квест
               </span>
             </h1>
-            <p className="text-sm md:text-base text-purple-200/80 font-medium">
-              1 класс • 50 слов
+            <p className="text-base md:text-lg text-purple-200/80 font-medium">
+              1 класс • {WORDS.length} слов
             </p>
           </div>
 
@@ -787,145 +968,132 @@ function App() {
       {/* ============ SHOWING ============ */}
       {gameState === 'showing' && currentWord && (
         <div className="app-screen app-screen-hud">
-          <div className="text-center mb-4 animate-fade-in-up">
-            <div className="inline-flex items-center gap-2 bg-yellow-500/15 border border-yellow-400/30 rounded-full px-4 py-1.5">
+          <div className="play-stage">
+            <div className="play-badge bg-yellow-500/15 border-yellow-400/30 text-yellow-100">
               <span>📖</span>
-              <span className="text-yellow-200 font-bold text-sm">Запомни слово!</span>
+              <span>Запомни слово!</span>
             </div>
-          </div>
-
-          <div className="relative">
-            <div className="text-6xl md:text-7xl mb-4 animate-float">{currentWord.emoji}</div>
-            <div className="word-card-showing">
-              <div className="text-3xl md:text-5xl font-black tracking-wider text-white animate-word-appear">
-                {displayedWord}
+            <div className="play-hero">
+              <div className="play-emoji animate-float">{currentWord.emoji}</div>
+              <div className="word-card-showing">
+                <div className="play-word animate-word-appear">{displayedWord}</div>
               </div>
             </div>
+            <button onClick={goToGuessing} className="play-cta btn-primary">
+              Далее →
+            </button>
           </div>
-
-          <button onClick={goToGuessing} className="mt-8 btn-primary text-base px-8 py-3.5 animate-fade-in-up" style={{ animationDelay: '0.3s' }}>
-            Далее →
-          </button>
         </div>
       )}
 
       {/* ============ GUESSING ============ */}
       {gameState === 'guessing' && currentWord && (
         <div className="app-screen app-screen-hud">
-          <div className="text-center mb-4 animate-fade-in-up">
-            <div className="inline-flex items-center gap-2 bg-purple-500/15 border border-purple-400/30 rounded-full px-4 py-1.5 mb-2">
-              <span>🔍</span>
-              <span className="text-purple-200 font-bold text-sm">Что с этим словом?</span>
-            </div>
-            {showHint && (
-              <div className="mt-2 bg-blue-500/20 border border-blue-400/40 rounded-xl px-3 py-1.5 animate-pulse">
-                <span className="text-blue-200 font-bold text-sm">{getHintText()}</span>
+          <div className="play-stage">
+            <div>
+              <div className="play-badge bg-purple-500/15 border-purple-400/30 text-purple-100">
+                <span>🔍</span>
+                <span>Что с этим словом?</span>
               </div>
-            )}
-          </div>
-
-          <div className="relative mb-6 animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
-            <div className="text-5xl mb-3">{currentWord.emoji}</div>
-            <div className="word-card-guessing">
-              <div className="text-3xl md:text-5xl font-black tracking-wider text-white">
-                {displayedWord}
+              {showHint && (
+                <div className="play-hint">{getHintText()}</div>
+              )}
+            </div>
+            <div className="play-hero">
+              <div className="play-emoji">{currentWord.emoji}</div>
+              <div className="word-card-guessing">
+                <div className="play-word">{displayedWord}</div>
               </div>
             </div>
+            <div className="play-actions">
+              <div className="play-choice-row">
+                <button onClick={handleHasError} className="flex-1 btn-danger play-choice">
+                  <span className="text-2xl block mb-1">✏️</span>
+                  Есть ошибка!
+                </button>
+                <button onClick={handleAllCorrect} className="flex-1 btn-success play-choice">
+                  <span className="text-2xl block mb-1">✅</span>
+                  Всё верно!
+                </button>
+              </div>
+              {hints > 0 && !showHint && (
+                <button onClick={useHint} className="btn-hint play-hint-btn">
+                  💡 Подсказка ({hints})
+                </button>
+              )}
+            </div>
           </div>
-
-          <div className="flex flex-col sm:flex-row gap-3 w-full max-w-lg animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
-            <button onClick={handleHasError} className="flex-1 btn-danger text-base py-4">
-              <span className="text-xl block mb-1">✏️</span>
-              Есть ошибка!
-            </button>
-            <button onClick={handleAllCorrect} className="flex-1 btn-success text-base py-4">
-              <span className="text-xl block mb-1">✅</span>
-              Всё верно!
-            </button>
-          </div>
-
-          {hints > 0 && !showHint && (
-            <button onClick={useHint} className="mt-4 btn-hint text-sm animate-fade-in-up" style={{ animationDelay: '0.3s' }}>
-              💡 Подсказка ({hints})
-            </button>
-          )}
         </div>
       )}
 
       {/* ============ FIXING ============ */}
       {gameState === 'fixing' && currentWord && !fixState && (
         <div className="app-screen app-screen-hud">
-          <div className="text-center mb-4 animate-fade-in-up">
-            <div className="inline-flex items-center gap-2 bg-orange-500/15 border border-orange-400/30 rounded-full px-4 py-1.5">
-              <span>✏️</span>
-              <span className="text-orange-200 font-bold text-sm">Нажми на неправильную букву!</span>
-            </div>
-            {showHint && currentError && (
-              <div className="mt-2 bg-blue-500/20 border border-blue-400/40 rounded-xl px-3 py-1.5">
-                <span className="text-blue-200 font-bold text-sm">{getHintText()}</span>
+          <div className="play-stage">
+            <div>
+              <div className="play-badge bg-orange-500/15 border-orange-400/30 text-orange-100">
+                <span>✏️</span>
+                <span>Нажми на неправильную букву!</span>
               </div>
-            )}
-          </div>
-
-          <div className="relative mb-6 animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
-            <div className="text-5xl mb-3">{currentWord.emoji}</div>
-            <div className="word-card-fixing">
-              <div className="text-3xl md:text-5xl font-black tracking-wider text-white flex flex-wrap justify-center gap-1">
-                {getLettersArray(displayedWord).map((letter, i) => (
-                  <button
-                    key={i}
-                    onClick={() => handleLetterClick(i)}
-                    className="letter-tile animate-letter-pop"
-                    style={{ animationDelay: `${i * 0.05}s` }}
-                  >
-                    {letter}
-                  </button>
-                ))}
+              {showHint && currentError && (
+                <div className="play-hint">{getHintText()}</div>
+              )}
+            </div>
+            <div className="play-hero">
+              <div className="play-emoji">{currentWord.emoji}</div>
+              <div className="word-card-fixing">
+                <div className="play-letters">
+                  {getLettersArray(displayedWord).map((letter, i) => (
+                    <button
+                      key={i}
+                      onClick={() => handleLetterClick(i)}
+                      className="letter-tile animate-letter-pop"
+                      style={{ animationDelay: `${i * 0.05}s` }}
+                    >
+                      {letter}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
+            <p className="play-tip">👆 Нажми на букву, которую нужно исправить</p>
           </div>
-
-          <p className="text-white/50 text-sm animate-fade-in-up" style={{ animationDelay: '0.3s' }}>
-            👆 Нажми на букву, которую нужно исправить
-          </p>
         </div>
       )}
 
       {/* ============ FIXING - выбор буквы ============ */}
       {gameState === 'fixing' && currentWord && fixState && (
         <div className="app-screen app-screen-hud">
-          <div className="text-center mb-4 animate-fade-in-up">
-            <div className="inline-flex items-center gap-2 bg-cyan-500/15 border border-cyan-400/30 rounded-full px-4 py-1.5">
+          <div className="play-stage">
+            <div className="play-badge bg-cyan-500/15 border-cyan-400/30 text-cyan-100">
               <span>🔄</span>
-              <span className="text-cyan-200 font-bold text-sm">Выбери правильную букву:</span>
+              <span>Выбери правильную букву</span>
             </div>
-          </div>
-
-          <div className="relative mb-6 animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
-            <div className="word-card-fixing">
-              <div className="text-3xl md:text-5xl font-black tracking-wider text-white flex flex-wrap justify-center gap-1">
-                {getLettersArray(displayedWord).map((letter, i) => (
-                  <span
-                    key={i}
-                    className={`letter-tile-static ${i === fixState.selectedLetterIndex ? 'letter-tile-selected' : ''}`}
-                  >
-                    {i === fixState.selectedLetterIndex ? '?' : letter}
-                  </span>
-                ))}
+            <div className="play-hero">
+              <div className="word-card-fixing">
+                <div className="play-letters">
+                  {getLettersArray(displayedWord).map((letter, i) => (
+                    <span
+                      key={i}
+                      className={`letter-tile-static ${i === fixState.selectedLetterIndex ? 'letter-tile-selected' : ''}`}
+                    >
+                      {i === fixState.selectedLetterIndex ? '?' : letter}
+                    </span>
+                  ))}
+                </div>
               </div>
             </div>
-          </div>
-
-          <div className="flex gap-3 animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
-            {fixState.options.map((option, i) => (
-              <button
-                key={i}
-                onClick={() => handleOptionSelect(option)}
-                className="option-letter-btn"
-              >
-                {option}
-              </button>
-            ))}
+            <div className="play-options">
+              {fixState.options.map((option, i) => (
+                <button
+                  key={i}
+                  onClick={() => handleOptionSelect(option)}
+                  className="option-letter-btn"
+                >
+                  {option}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       )}
@@ -933,44 +1101,45 @@ function App() {
       {/* ============ RESULT ============ */}
       {gameState === 'result' && currentWord && (
         <div className="app-screen app-screen-hud">
-          {feedback === 'correct' ? (
-            <div className="text-center animate-fade-in-up">
-              <div className="text-6xl md:text-7xl mb-3 animate-bounce-big">🎉</div>
-              <h2 className="text-2xl md:text-3xl font-black text-green-300 mb-4">Молодец!</h2>
-              <div className="glass-card-result border-green-400/30 bg-green-500/10 max-w-xs w-full">
-                <p className="text-xs text-green-200/70 mb-1 uppercase tracking-wider font-bold">Правильно:</p>
-                <p className="text-2xl md:text-3xl font-black text-white tracking-wider mb-2">{currentWord.correct}</p>
-                {currentError?.errorType !== 'none' && (
-                  <div className="bg-red-500/10 rounded-xl p-2 border border-red-400/20">
-                    <p className="text-xs text-red-200/70">Было: <span className="text-red-300 line-through">{displayedWord}</span></p>
-                  </div>
-                )}
+          <div className="play-stage">
+            {feedback === 'correct' ? (
+              <div className="play-hero">
+                <div className="play-emoji animate-bounce-big">🎉</div>
+                <h2 className="play-title text-green-300">Молодец!</h2>
+                <div className="glass-card-result border-green-400/30 bg-green-500/10 w-full">
+                  <p className="text-sm text-green-200/70 mb-1 uppercase tracking-wider font-bold">Правильно</p>
+                  <p className="play-word mb-2">{currentWord.correct}</p>
+                  {currentError?.errorType !== 'none' && (
+                    <div className="bg-red-500/10 rounded-xl p-3 border border-red-400/20">
+                      <p className="text-base text-red-200/80">Было: <span className="text-red-300 line-through">{displayedWord}</span></p>
+                    </div>
+                  )}
+                </div>
+                <div className="play-money text-yellow-300">
+                  +{streak >= 3 ? 10 : 5} ₽ 💰
+                  {streak >= 3 && <span className="text-orange-400 ml-2">🔥</span>}
+                </div>
               </div>
-              <div className="mt-4 text-2xl font-black text-yellow-300 animate-pulse">
-                +{streak >= 3 ? 10 : 5} ₽ 💰
-                {streak >= 3 && <span className="text-orange-400 ml-2 text-sm">🔥</span>}
+            ) : (
+              <div className="play-hero">
+                <div className="play-emoji">😔</div>
+                <h2 className="play-title text-red-300">Неправильно</h2>
+                <div className="glass-card-result border-red-400/30 bg-red-500/10 w-full">
+                  <p className="text-sm text-red-200/70 mb-1 uppercase tracking-wider font-bold">Запомни</p>
+                  <p className="play-word mb-2">{currentWord.correct}</p>
+                  {currentError?.errorType !== 'none' && (
+                    <div className="bg-red-500/10 rounded-xl p-3 border border-red-400/20">
+                      <p className="text-base text-red-200/80">Было: <span className="text-red-300">{displayedWord}</span></p>
+                    </div>
+                  )}
+                </div>
+                <div className="play-money text-red-300">-3 ₽ 💸</div>
               </div>
-            </div>
-          ) : (
-            <div className="text-center animate-fade-in-up">
-              <div className="text-6xl md:text-7xl mb-3">😔</div>
-              <h2 className="text-2xl md:text-3xl font-black text-red-300 mb-4">Неправильно</h2>
-              <div className="glass-card-result border-red-400/30 bg-red-500/10 max-w-xs w-full">
-                <p className="text-xs text-red-200/70 mb-1 uppercase tracking-wider font-bold">Запомни:</p>
-                <p className="text-2xl md:text-3xl font-black text-white tracking-wider mb-2">{currentWord.correct}</p>
-                {currentError?.errorType !== 'none' && (
-                  <div className="bg-red-500/10 rounded-xl p-2 border border-red-400/20">
-                    <p className="text-xs text-red-200/70">Было: <span className="text-red-300">{displayedWord}</span></p>
-                  </div>
-                )}
-              </div>
-              <div className="mt-4 text-2xl font-black text-red-300">-3 ₽ 💸</div>
-            </div>
-          )}
-
-          <button onClick={nextWord} className="mt-6 btn-primary text-base px-8 py-3.5 animate-fade-in-up" style={{ animationDelay: '0.3s' }}>
-            {currentWordIndex + 1 >= wordsOrder.length ? '🏆 Итоги' : '➡️ Дальше'}
-          </button>
+            )}
+            <button onClick={nextWord} className="play-cta btn-primary">
+              {currentWordIndex + 1 >= wordsOrder.length ? '🏆 Итоги' : '➡️ Дальше'}
+            </button>
+          </div>
         </div>
       )}
 
