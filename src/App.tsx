@@ -2,16 +2,17 @@ import { useState, useEffect, useCallback } from 'react';
 import { playCorrectSound, playWrongSound, playCoinSound, playClickSound, playShowSound, resumeAudio } from './sounds';
 
 // Ударение через combining acute accent (U+0301)
-const a = '\u0301'; // знак ударения
+const a = '\u0301';
 
 interface WordData {
-  correct: string;      // слово с ударением
-  correctPlain: string; // слово без ударения
+  correct: string;
+  correctPlain: string;
   emoji: string;
   errors: { wrong: string; hasError: boolean }[];
 }
 
 const WORDS: WordData[] = [
+  // Обычные слова
   { correct: `м${a}ма`, correctPlain: 'мама', emoji: '👩', errors: [{ wrong: `м${a}мо`, hasError: true }, { wrong: `м${a}ма`, hasError: false }] },
   { correct: `п${a}па`, correctPlain: 'папа', emoji: '👨', errors: [{ wrong: `п${a}по`, hasError: true }, { wrong: `п${a}па`, hasError: false }] },
   { correct: `до${a}м`, correctPlain: 'дом', emoji: '🏠', errors: [{ wrong: `да${a}м`, hasError: true }, { wrong: `до${a}м`, hasError: false }] },
@@ -52,12 +53,23 @@ const WORDS: WordData[] = [
   { correct: `о${a}сень`, correctPlain: 'осень', emoji: '🍂', errors: [{ wrong: `оси${a}нь`, hasError: true }, { wrong: `о${a}сень`, hasError: false }] },
   { correct: `до${a}ждь`, correctPlain: 'дождь', emoji: '🌧️', errors: [{ wrong: `до${a}шт`, hasError: true }, { wrong: `до${a}ждь`, hasError: false }] },
   { correct: `ве${a}тер`, correctPlain: 'ветер', emoji: '💨', errors: [{ wrong: `ви${a}тер`, hasError: true }, { wrong: `ве${a}тер`, hasError: false }] },
+  // Слова с заглавной буквы
+  { correct: `Москва${a}`, correctPlain: 'Москва', emoji: '🏛️', errors: [{ wrong: `Масква${a}`, hasError: true }, { wrong: `Москва${a}`, hasError: false }] },
+  { correct: `Росси${a}я`, correctPlain: 'Россия', emoji: '🇷🇺', errors: [{ wrong: `Раси${a}я`, hasError: true }, { wrong: `Росси${a}я`, hasError: false }] },
+  { correct: `Вла${a}димир`, correctPlain: 'Владимир', emoji: '👑', errors: [{ wrong: `Вала${a}димир`, hasError: true }, { wrong: `Вла${a}димир`, hasError: false }] },
+  { correct: `Анна${a}`, correctPlain: 'Анна', emoji: '👸', errors: [{ wrong: `Анн${a}о`, hasError: true }, { wrong: `Анна${a}`, hasError: false }] },
+  { correct: `Ива${a}н`, correctPlain: 'Иван', emoji: '🤴', errors: [{ wrong: `Ивон${a}`, hasError: true }, { wrong: `Ива${a}н`, hasError: false }] },
+  { correct: `Ма${a}ри${a}я`, correctPlain: 'Мария', emoji: '👧', errors: [{ wrong: `Маря${a}`, hasError: true }, { wrong: `Ма${a}ри${a}я`, hasError: false }] },
+  { correct: `Пет${a}р`, correctPlain: 'Петр', emoji: '👦', errors: [{ wrong: `Пат${a}р`, hasError: true }, { wrong: `Пет${a}р`, hasError: false }] },
+  { correct: `Сере${a}да`, correctPlain: 'Середа', emoji: '📅', errors: [{ wrong: `Сире${a}да`, hasError: true }, { wrong: `Сере${a}да`, hasError: false }] },
+  { correct: `Во${a}скресенье`, correctPlain: 'Воскресенье', emoji: '🗓️', errors: [{ wrong: `Васкресе${a}нье`, hasError: true }, { wrong: `Во${a}скресенье`, hasError: false }] },
+  { correct: `Янва${a}рь`, correctPlain: 'Январь', emoji: '🎄', errors: [{ wrong: `Инва${a}рь`, hasError: true }, { wrong: `Янва${a}рь`, hasError: false }] },
 ];
 
-type GameState = 'menu' | 'shop' | 'showing' | 'guessing' | 'result' | 'final';
+type GameState = 'splash' | 'menu' | 'shop' | 'showing' | 'guessing' | 'result' | 'final';
 
 function App() {
-  const [gameState, setGameState] = useState<GameState>('menu');
+  const [gameState, setGameState] = useState<GameState>('splash');
   const [currentWordIndex, setCurrentWordIndex] = useState(0);
   const [money, setMoney] = useState(() => {
     const saved = localStorage.getItem('dictation_money');
@@ -78,7 +90,7 @@ function App() {
   const [wordsOrder, setWordsOrder] = useState<number[]>([]);
   const [showHint, setShowHint] = useState(false);
   const [showMoneyAnim, setShowMoneyAnim] = useState<{ amount: number; key: number } | null>(null);
-  const [cardFlip, setCardFlip] = useState(false);
+  const [mistakeWords, setMistakeWords] = useState<number[]>([]);
 
   useEffect(() => {
     localStorage.setItem('dictation_money', money.toString());
@@ -88,40 +100,71 @@ function App() {
     localStorage.setItem('dictation_hints', hints.toString());
   }, [hints]);
 
-  const shuffleWords = useCallback(() => {
-    const shuffled = [...Array(WORDS.length).keys()];
-    for (let i = shuffled.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  // Splash screen -> menu
+  useEffect(() => {
+    if (gameState === 'splash') {
+      const timer = setTimeout(() => {
+        setGameState('menu');
+      }, 3000);
+      return () => clearTimeout(timer);
     }
-    return shuffled;
+  }, [gameState]);
+
+  const generateWordsOrder = useCallback(() => {
+    // Создаём порядок из 50 слов с повторением слов с ошибками каждые 5-9 слов
+    const baseOrder = [...Array(WORDS.length).keys()];
+    
+    // Перемешиваем базовый порядок
+    for (let i = baseOrder.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [baseOrder[i], baseOrder[j]] = [baseOrder[j], baseOrder[i]];
+    }
+    
+    // Добавляем слова для достижения 50
+    const result = [...baseOrder];
+    while (result.length < 50) {
+      result.push(Math.floor(Math.random() * WORDS.length));
+    }
+    
+    return result;
+  }, []);
+
+  const insertMistakeWord = useCallback((currentOrder: number[], currentIndex: number, mistakePool: number[]) => {
+    if (mistakePool.length === 0) return currentOrder;
+    
+    // Вставляем слово с ошибкой через 5-9 слов
+    const insertAt = currentIndex + Math.floor(Math.random() * 5) + 5;
+    if (insertAt < currentOrder.length) {
+      const mistakeWord = mistakePool[Math.floor(Math.random() * mistakePool.length)];
+      const newOrder = [...currentOrder];
+      newOrder.splice(insertAt, 0, mistakeWord);
+      return newOrder;
+    }
+    
+    return currentOrder;
   }, []);
 
   const startGame = () => {
     resumeAudio();
-    const shuffled = shuffleWords();
-    setWordsOrder(shuffled);
+    const order = generateWordsOrder();
+    setWordsOrder(order);
     setCurrentWordIndex(0);
     setScore(0);
     setMistakes(0);
     setStreak(0);
     setBestStreak(0);
     setTotalEarned(0);
+    setMistakeWords([]);
     setCurrentErrorVariant(Math.random() > 0.5 ? 1 : 0);
     setShowHint(false);
     setFeedback(null);
-    setCardFlip(false);
     setGameState('showing');
     playShowSound();
   };
 
   const goToGuessing = () => {
     playClickSound();
-    setCardFlip(true);
-    setTimeout(() => {
-      setGameState('guessing');
-      setCardFlip(false);
-    }, 400);
+    setGameState('guessing');
   };
 
   const handleAnswer = (thinksHasErrors: boolean) => {
@@ -150,6 +193,16 @@ function App() {
       setMoney(prev => Math.max(0, prev - 3));
       setMistakes(prev => prev + 1);
       setStreak(0);
+      
+      // Добавляем слово в пул для повторения
+      setMistakeWords(prev => {
+        const newMistakes = [...prev];
+        if (!newMistakes.includes(wordIndex)) {
+          newMistakes.push(wordIndex);
+        }
+        return newMistakes;
+      });
+      
       playWrongSound();
     }
 
@@ -169,12 +222,30 @@ function App() {
     if (currentWordIndex + 1 >= wordsOrder.length) {
       setGameState('final');
     } else {
-      setCurrentWordIndex(prev => prev + 1);
+      const nextIndex = currentWordIndex + 1;
+      
+      // Проверяем, нужно ли вставить слово с ошибкой
+      let updatedOrder = wordsOrder;
+      if (mistakeWords.length > 0 && nextIndex % 7 === 0) {
+        updatedOrder = insertMistakeWord(wordsOrder, nextIndex, mistakeWords);
+        setWordsOrder(updatedOrder);
+      }
+      
+      setCurrentWordIndex(nextIndex);
       setCurrentErrorVariant(Math.random() > 0.5 ? 1 : 0);
       setShowHint(false);
       setFeedback(null);
       setGameState('showing');
       playShowSound();
+    }
+  };
+
+  const goBack = () => {
+    playClickSound();
+    if (gameState === 'showing' || gameState === 'guessing' || gameState === 'result') {
+      setGameState('menu');
+    } else if (gameState === 'shop') {
+      setGameState('menu');
     }
   };
 
@@ -206,8 +277,26 @@ function App() {
   const hasErrors = currentWord ? currentWord.errors[currentErrorVariant].hasError : false;
   const progress = wordsOrder.length > 0 ? ((currentWordIndex) / wordsOrder.length) * 100 : 0;
 
+  // Splash Screen
+  if (gameState === 'splash') {
+    return (
+      <div className="splash-screen">
+        <div className="splash-logo text-9xl mb-6">📝</div>
+        <div className="splash-title">
+          <h1 className="text-5xl md:text-6xl font-black bg-gradient-to-r from-yellow-200 via-pink-200 to-purple-200 bg-clip-text text-transparent text-center">
+            Диктант Квест
+          </h1>
+          <p className="text-lg text-white/60 text-center mt-4">Подготовка к диктанту</p>
+        </div>
+        <div className="splash-loader">
+          <div className="splash-loader-bar" />
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#0f0c29] via-[#302b63] to-[#24243e] text-white overflow-hidden relative">
+    <div className="min-h-screen bg-gradient-to-br from-[#0f0c29] via-[#302b63] to-[#24243e] text-white overflow-hidden relative safe-area-top safe-area-bottom">
       {/* Animated background */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
         <div className="absolute top-0 left-0 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl animate-pulse" />
@@ -253,6 +342,9 @@ function App() {
           </div>
           <div className="bg-black/40 backdrop-blur-xl border-b border-white/10 px-4 py-2.5 flex justify-between items-center">
             <div className="flex items-center gap-2">
+              <button onClick={goBack} className="btn-back text-sm">
+                ← Назад
+              </button>
               <div className="bg-gradient-to-r from-yellow-500/20 to-amber-500/20 border border-yellow-400/40 rounded-full px-3 py-1.5 flex items-center gap-1.5 shadow-inner">
                 <span className="text-base">💰</span>
                 <span className="font-black text-yellow-300 text-sm tabular-nums">{money} ₽</span>
@@ -404,7 +496,7 @@ function App() {
             </div>
           </div>
 
-          <div className={`relative transition-all duration-500 ${cardFlip ? 'scale-90 opacity-0 rotate-y-180' : 'scale-100 opacity-100'}`}>
+          <div className="relative">
             <div className="text-7xl md:text-8xl mb-6 animate-float">{currentWord.emoji}</div>
             
             <div className="word-card-showing">
