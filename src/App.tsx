@@ -647,7 +647,7 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen min-h-[100dvh] bg-gradient-to-br from-[#0f0c29] via-[#302b63] to-[#24243e] text-white overflow-hidden relative safe-area-top safe-area-bottom">
+    <div className="app-shell bg-gradient-to-br from-[#0f0c29] via-[#302b63] to-[#24243e] text-white">
       {/* Animated background */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
         <div className="absolute top-0 left-0 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl animate-pulse" />
@@ -680,7 +680,7 @@ function App() {
 
       {/* Top HUD */}
       {gameState !== 'menu' && gameState !== 'shop' && gameState !== 'final' && (
-        <div className="fixed top-0 left-0 right-0 z-50">
+        <div className="app-hud">
           <div className="h-1 bg-white/10">
             <div className="h-full bg-gradient-to-r from-green-400 via-emerald-400 to-cyan-400 transition-all duration-500 shadow-[0_0_8px_rgba(52,211,153,0.5)]" style={{ width: `${progress}%` }} />
           </div>
@@ -712,7 +712,7 @@ function App() {
 
       {/* ============ MENU ============ */}
       {gameState === 'menu' && (
-        <div className="min-h-screen min-h-[100dvh] flex flex-col items-center justify-center p-4 relative">
+        <div className="app-screen relative">
           <div className="text-center mb-6 animate-fade-in-up">
             <div className="relative inline-block mb-4">
               <div className="text-7xl md:text-8xl animate-float">📝</div>
@@ -766,7 +766,7 @@ function App() {
 
       {/* ============ SHOP ============ */}
       {gameState === 'shop' && (
-        <div className="min-h-screen min-h-[100dvh] flex flex-col items-center justify-center p-4">
+        <div className="app-screen">
           <div className="text-center mb-6 animate-fade-in-up">
             <div className="text-6xl mb-3">🛒</div>
             <h1 className="text-3xl font-black bg-gradient-to-r from-blue-200 to-cyan-200 bg-clip-text text-transparent">Магазин</h1>
@@ -786,7 +786,7 @@ function App() {
 
       {/* ============ SHOWING ============ */}
       {gameState === 'showing' && currentWord && (
-        <div className="min-h-screen min-h-[100dvh] flex flex-col items-center justify-center p-4 pt-20">
+        <div className="app-screen app-screen-hud">
           <div className="text-center mb-4 animate-fade-in-up">
             <div className="inline-flex items-center gap-2 bg-yellow-500/15 border border-yellow-400/30 rounded-full px-4 py-1.5">
               <span>📖</span>
@@ -811,7 +811,7 @@ function App() {
 
       {/* ============ GUESSING ============ */}
       {gameState === 'guessing' && currentWord && (
-        <div className="min-h-screen min-h-[100dvh] flex flex-col items-center justify-center p-4 pt-20">
+        <div className="app-screen app-screen-hud">
           <div className="text-center mb-4 animate-fade-in-up">
             <div className="inline-flex items-center gap-2 bg-purple-500/15 border border-purple-400/30 rounded-full px-4 py-1.5 mb-2">
               <span>🔍</span>
@@ -854,7 +854,7 @@ function App() {
 
       {/* ============ FIXING ============ */}
       {gameState === 'fixing' && currentWord && !fixState && (
-        <div className="min-h-screen min-h-[100dvh] flex flex-col items-center justify-center p-4 pt-20">
+        <div className="app-screen app-screen-hud">
           <div className="text-center mb-4 animate-fade-in-up">
             <div className="inline-flex items-center gap-2 bg-orange-500/15 border border-orange-400/30 rounded-full px-4 py-1.5">
               <span>✏️</span>
@@ -893,7 +893,7 @@ function App() {
 
       {/* ============ FIXING - выбор буквы ============ */}
       {gameState === 'fixing' && currentWord && fixState && (
-        <div className="min-h-screen min-h-[100dvh] flex flex-col items-center justify-center p-4 pt-20">
+        <div className="app-screen app-screen-hud">
           <div className="text-center mb-4 animate-fade-in-up">
             <div className="inline-flex items-center gap-2 bg-cyan-500/15 border border-cyan-400/30 rounded-full px-4 py-1.5">
               <span>🔄</span>
@@ -932,7 +932,7 @@ function App() {
 
       {/* ============ RESULT ============ */}
       {gameState === 'result' && currentWord && (
-        <div className="min-h-screen min-h-[100dvh] flex flex-col items-center justify-center p-4 pt-20">
+        <div className="app-screen app-screen-hud">
           {feedback === 'correct' ? (
             <div className="text-center animate-fade-in-up">
               <div className="text-6xl md:text-7xl mb-3 animate-bounce-big">🎉</div>
@@ -976,7 +976,7 @@ function App() {
 
       {/* ============ FINAL ============ */}
       {gameState === 'final' && (
-        <div className="min-h-screen min-h-[100dvh] flex flex-col items-center justify-center p-4">
+        <div className="app-screen">
           <div className="text-center mb-4 animate-fade-in-up">
             <div className="text-7xl mb-3 animate-bounce-big">🏆</div>
             <h1 className="text-3xl md:text-4xl font-black bg-gradient-to-r from-yellow-200 to-orange-200 bg-clip-text text-transparent">

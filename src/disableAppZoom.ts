@@ -26,7 +26,9 @@ export function disableAppZoom() {
     "touchend",
     (event: TouchEvent) => {
       const now = Date.now();
-      if (now - lastTouchEnd <= 350) {
+      const target = event.target as HTMLElement | null;
+      const onControl = Boolean(target?.closest("button, a, input, textarea, select, label"));
+      if (!onControl && now - lastTouchEnd <= 350) {
         event.preventDefault();
       }
       lastTouchEnd = now;
