@@ -1,54 +1,57 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { playCorrectSound, playWrongSound, playCoinSound, playClickSound, playShowSound, resumeAudio } from './sounds';
 
-// Слова для первоклассника с вариантами ошибок
+// Ударение через combining acute accent (U+0301)
+const a = '\u0301'; // знак ударения
+
 interface WordData {
-  correct: string;
+  correct: string;      // слово с ударением
+  correctPlain: string; // слово без ударения
   emoji: string;
-  errors: { wrong: string; errorPositions: number[] }[];
+  errors: { wrong: string; hasError: boolean }[];
 }
 
 const WORDS: WordData[] = [
-  { correct: 'мама', emoji: '👩', errors: [{ wrong: 'мома', errorPositions: [1] }, { wrong: 'мама', errorPositions: [] }] },
-  { correct: 'папа', emoji: '👨', errors: [{ wrong: 'попа', errorPositions: [1] }, { wrong: 'папа', errorPositions: [] }] },
-  { correct: 'дом', emoji: '🏠', errors: [{ wrong: 'дам', errorPositions: [1] }, { wrong: 'дом', errorPositions: [] }] },
-  { correct: 'кот', emoji: '🐱', errors: [{ wrong: 'кат', errorPositions: [1] }, { wrong: 'кот', errorPositions: [] }] },
-  { correct: 'лес', emoji: '🌲', errors: [{ wrong: 'лис', errorPositions: [1] }, { wrong: 'лес', errorPositions: [] }] },
-  { correct: 'река', emoji: '🏞️', errors: [{ wrong: 'рика', errorPositions: [1] }, { wrong: 'река', errorPositions: [] }] },
-  { correct: 'гора', emoji: '⛰️', errors: [{ wrong: 'гара', errorPositions: [1] }, { wrong: 'гора', errorPositions: [] }] },
-  { correct: 'снег', emoji: '❄️', errors: [{ wrong: 'сниг', errorPositions: [2] }, { wrong: 'снег', errorPositions: [] }] },
-  { correct: 'школа', emoji: '🏫', errors: [{ wrong: 'шкала', errorPositions: [2, 3] }, { wrong: 'школа', errorPositions: [] }] },
-  { correct: 'книга', emoji: '📖', errors: [{ wrong: 'кнега', errorPositions: [1] }, { wrong: 'книга', errorPositions: [] }] },
-  { correct: 'ручка', emoji: '✏️', errors: [{ wrong: 'ручька', errorPositions: [3] }, { wrong: 'ручка', errorPositions: [] }] },
-  { correct: 'солнце', emoji: '☀️', errors: [{ wrong: 'сонце', errorPositions: [] }, { wrong: 'солнце', errorPositions: [] }] },
-  { correct: 'заяц', emoji: '🐰', errors: [{ wrong: 'заец', errorPositions: [2] }, { wrong: 'заяц', errorPositions: [] }] },
-  { correct: 'лиса', emoji: '🦊', errors: [{ wrong: 'лисо', errorPositions: [3] }, { wrong: 'лиса', errorPositions: [] }] },
-  { correct: 'волк', emoji: '🐺', errors: [{ wrong: 'валк', errorPositions: [1] }, { wrong: 'волк', errorPositions: [] }] },
-  { correct: 'молоко', emoji: '🥛', errors: [{ wrong: 'молако', errorPositions: [1] }, { wrong: 'молоко', errorPositions: [] }] },
-  { correct: 'хлеб', emoji: '🍞', errors: [{ wrong: 'хлеп', errorPositions: [3] }, { wrong: 'хлеб', errorPositions: [] }] },
-  { correct: 'вода', emoji: '💧', errors: [{ wrong: 'вада', errorPositions: [1] }, { wrong: 'вода', errorPositions: [] }] },
-  { correct: 'земля', emoji: '🌍', errors: [{ wrong: 'зимля', errorPositions: [2] }, { wrong: 'земля', errorPositions: [] }] },
-  { correct: 'небо', emoji: '🌤️', errors: [{ wrong: 'нибо', errorPositions: [1] }, { wrong: 'небо', errorPositions: [] }] },
-  { correct: 'звезда', emoji: '⭐', errors: [{ wrong: 'звездо', errorPositions: [5] }, { wrong: 'звезда', errorPositions: [] }] },
-  { correct: 'трава', emoji: '🌿', errors: [{ wrong: 'трова', errorPositions: [1] }, { wrong: 'трава', errorPositions: [] }] },
-  { correct: 'дерево', emoji: '🌳', errors: [{ wrong: 'дерефо', errorPositions: [5] }, { wrong: 'дерево', errorPositions: [] }] },
-  { correct: 'цветок', emoji: '🌸', errors: [{ wrong: 'цвиток', errorPositions: [1] }, { wrong: 'цветок', errorPositions: [] }] },
-  { correct: 'птица', emoji: '🐦', errors: [{ wrong: 'птеца', errorPositions: [1] }, { wrong: 'птица', errorPositions: [] }] },
-  { correct: 'рыба', emoji: '🐟', errors: [{ wrong: 'реба', errorPositions: [1] }, { wrong: 'рыба', errorPositions: [] }] },
-  { correct: 'каша', emoji: '🥣', errors: [{ wrong: 'коша', errorPositions: [1] }, { wrong: 'каша', errorPositions: [] }] },
-  { correct: 'суп', emoji: '🍲', errors: [{ wrong: 'суп', errorPositions: [] }, { wrong: 'сап', errorPositions: [1] }] },
-  { correct: 'стол', emoji: '🪑', errors: [{ wrong: 'стал', errorPositions: [1] }, { wrong: 'стол', errorPositions: [] }] },
-  { correct: 'окно', emoji: '🪟', errors: [{ wrong: 'акно', errorPositions: [0] }, { wrong: 'окно', errorPositions: [] }] },
-  { correct: 'дверь', emoji: '🚪', errors: [{ wrong: 'двер', errorPositions: [] }, { wrong: 'дверь', errorPositions: [] }] },
-  { correct: 'город', emoji: '🏙️', errors: [{ wrong: 'гарод', errorPositions: [1] }, { wrong: 'город', errorPositions: [] }] },
-  { correct: 'улица', emoji: '🛣️', errors: [{ wrong: 'улеца', errorPositions: [1] }, { wrong: 'улица', errorPositions: [] }] },
-  { correct: 'дорога', emoji: '🛤️', errors: [{ wrong: 'дарога', errorPositions: [1] }, { wrong: 'дорога', errorPositions: [] }] },
-  { correct: 'зима', emoji: '⛄', errors: [{ wrong: 'зема', errorPositions: [1] }, { wrong: 'зима', errorPositions: [] }] },
-  { correct: 'весна', emoji: '🌷', errors: [{ wrong: 'висна', errorPositions: [1] }, { wrong: 'весна', errorPositions: [] }] },
-  { correct: 'лето', emoji: '🌞', errors: [{ wrong: 'лито', errorPositions: [1] }, { wrong: 'лето', errorPositions: [] }] },
-  { correct: 'осень', emoji: '🍂', errors: [{ wrong: 'осинь', errorPositions: [2] }, { wrong: 'осень', errorPositions: [] }] },
-  { correct: 'дождь', emoji: '🌧️', errors: [{ wrong: 'дошт', errorPositions: [] }, { wrong: 'дождь', errorPositions: [] }] },
-  { correct: 'ветер', emoji: '💨', errors: [{ wrong: 'витер', errorPositions: [2] }, { wrong: 'ветер', errorPositions: [] }] },
+  { correct: `м${a}ма`, correctPlain: 'мама', emoji: '👩', errors: [{ wrong: `м${a}мо`, hasError: true }, { wrong: `м${a}ма`, hasError: false }] },
+  { correct: `п${a}па`, correctPlain: 'папа', emoji: '👨', errors: [{ wrong: `п${a}по`, hasError: true }, { wrong: `п${a}па`, hasError: false }] },
+  { correct: `до${a}м`, correctPlain: 'дом', emoji: '🏠', errors: [{ wrong: `да${a}м`, hasError: true }, { wrong: `до${a}м`, hasError: false }] },
+  { correct: `ко${a}т`, correctPlain: 'кот', emoji: '🐱', errors: [{ wrong: `ка${a}т`, hasError: true }, { wrong: `ко${a}т`, hasError: false }] },
+  { correct: `ле${a}с`, correctPlain: 'лес', emoji: '🌲', errors: [{ wrong: `ли${a}с`, hasError: true }, { wrong: `ле${a}с`, hasError: false }] },
+  { correct: `река${a}`, correctPlain: 'река', emoji: '🏞️', errors: [{ wrong: `ри${a}ка`, hasError: true }, { wrong: `река${a}`, hasError: false }] },
+  { correct: `гора${a}`, correctPlain: 'гора', emoji: '⛰️', errors: [{ wrong: `га${a}ра`, hasError: true }, { wrong: `гора${a}`, hasError: false }] },
+  { correct: `сне${a}г`, correctPlain: 'снег', emoji: '❄️', errors: [{ wrong: `сни${a}г`, hasError: true }, { wrong: `сне${a}г`, hasError: false }] },
+  { correct: `шко${a}ла`, correctPlain: 'школа', emoji: '🏫', errors: [{ wrong: `шка${a}ла`, hasError: true }, { wrong: `шко${a}ла`, hasError: false }] },
+  { correct: `кни${a}га`, correctPlain: 'книга', emoji: '📖', errors: [{ wrong: `кне${a}га`, hasError: true }, { wrong: `кни${a}га`, hasError: false }] },
+  { correct: `ру${a}чка`, correctPlain: 'ручка', emoji: '✏️', errors: [{ wrong: `ру${a}чька`, hasError: true }, { wrong: `ру${a}чка`, hasError: false }] },
+  { correct: `со${a}лнце`, correctPlain: 'солнце', emoji: '☀️', errors: [{ wrong: `со${a}нце`, hasError: false }, { wrong: `со${a}лнцо`, hasError: true }] },
+  { correct: `за${a}яц`, correctPlain: 'заяц', emoji: '🐰', errors: [{ wrong: `за${a}ец`, hasError: true }, { wrong: `за${a}яц`, hasError: false }] },
+  { correct: `лиса${a}`, correctPlain: 'лиса', emoji: '🦊', errors: [{ wrong: `лисо${a}`, hasError: true }, { wrong: `лиса${a}`, hasError: false }] },
+  { correct: `во${a}лк`, correctPlain: 'волк', emoji: '🐺', errors: [{ wrong: `ва${a}лк`, hasError: true }, { wrong: `во${a}лк`, hasError: false }] },
+  { correct: `молоко${a}`, correctPlain: 'молоко', emoji: '🥛', errors: [{ wrong: `молако${a}`, hasError: true }, { wrong: `молоко${a}`, hasError: false }] },
+  { correct: `хле${a}б`, correctPlain: 'хлеб', emoji: '🍞', errors: [{ wrong: `хле${a}п`, hasError: true }, { wrong: `хле${a}б`, hasError: false }] },
+  { correct: `вода${a}`, correctPlain: 'вода', emoji: '💧', errors: [{ wrong: `вада${a}`, hasError: true }, { wrong: `вода${a}`, hasError: false }] },
+  { correct: `земля${a}`, correctPlain: 'земля', emoji: '🌍', errors: [{ wrong: `зимля${a}`, hasError: true }, { wrong: `земля${a}`, hasError: false }] },
+  { correct: `не${a}бо`, correctPlain: 'небо', emoji: '🌤️', errors: [{ wrong: `ни${a}бо`, hasError: true }, { wrong: `не${a}бо`, hasError: false }] },
+  { correct: `зве${a}зда`, correctPlain: 'звезда', emoji: '⭐', errors: [{ wrong: `зве${a}здо`, hasError: true }, { wrong: `зве${a}зда`, hasError: false }] },
+  { correct: `трава${a}`, correctPlain: 'трава', emoji: '🌿', errors: [{ wrong: `трова${a}`, hasError: true }, { wrong: `трава${a}`, hasError: false }] },
+  { correct: `де${a}рево`, correctPlain: 'дерево', emoji: '🌳', errors: [{ wrong: `де${a}рефо`, hasError: true }, { wrong: `де${a}рево`, hasError: false }] },
+  { correct: `цве${a}ток`, correctPlain: 'цветок', emoji: '🌸', errors: [{ wrong: `цви${a}ток`, hasError: true }, { wrong: `цве${a}ток`, hasError: false }] },
+  { correct: `пти${a}ца`, correctPlain: 'птица', emoji: '🐦', errors: [{ wrong: `пте${a}ца`, hasError: true }, { wrong: `пти${a}ца`, hasError: false }] },
+  { correct: `ры${a}ба`, correctPlain: 'рыба', emoji: '🐟', errors: [{ wrong: `ре${a}ба`, hasError: true }, { wrong: `ры${a}ба`, hasError: false }] },
+  { correct: `ка${a}ша`, correctPlain: 'каша', emoji: '🥣', errors: [{ wrong: `ко${a}ша`, hasError: true }, { wrong: `ка${a}ша`, hasError: false }] },
+  { correct: `су${a}п`, correctPlain: 'суп', emoji: '🍲', errors: [{ wrong: `са${a}п`, hasError: true }, { wrong: `су${a}п`, hasError: false }] },
+  { correct: `сто${a}л`, correctPlain: 'стол', emoji: '🪑', errors: [{ wrong: `ста${a}л`, hasError: true }, { wrong: `сто${a}л`, hasError: false }] },
+  { correct: `окно${a}`, correctPlain: 'окно', emoji: '🪟', errors: [{ wrong: `акно${a}`, hasError: true }, { wrong: `окно${a}`, hasError: false }] },
+  { correct: `две${a}рь`, correctPlain: 'дверь', emoji: '🚪', errors: [{ wrong: `две${a}р`, hasError: true }, { wrong: `две${a}рь`, hasError: false }] },
+  { correct: `го${a}род`, correctPlain: 'город', emoji: '🏙️', errors: [{ wrong: `га${a}род`, hasError: true }, { wrong: `го${a}род`, hasError: false }] },
+  { correct: `ули${a}ца`, correctPlain: 'улица', emoji: '🛣️', errors: [{ wrong: `уле${a}ца`, hasError: true }, { wrong: `ули${a}ца`, hasError: false }] },
+  { correct: `доро${a}га`, correctPlain: 'дорога', emoji: '🛤️', errors: [{ wrong: `даро${a}га`, hasError: true }, { wrong: `доро${a}га`, hasError: false }] },
+  { correct: `зи${a}ма`, correctPlain: 'зима', emoji: '⛄', errors: [{ wrong: `зе${a}ма`, hasError: true }, { wrong: `зи${a}ма`, hasError: false }] },
+  { correct: `весна${a}`, correctPlain: 'весна', emoji: '🌷', errors: [{ wrong: `висна${a}`, hasError: true }, { wrong: `весна${a}`, hasError: false }] },
+  { correct: `ле${a}то`, correctPlain: 'лето', emoji: '🌞', errors: [{ wrong: `ли${a}то`, hasError: true }, { wrong: `ле${a}то`, hasError: false }] },
+  { correct: `о${a}сень`, correctPlain: 'осень', emoji: '🍂', errors: [{ wrong: `оси${a}нь`, hasError: true }, { wrong: `о${a}сень`, hasError: false }] },
+  { correct: `до${a}ждь`, correctPlain: 'дождь', emoji: '🌧️', errors: [{ wrong: `до${a}шт`, hasError: true }, { wrong: `до${a}ждь`, hasError: false }] },
+  { correct: `ве${a}тер`, correctPlain: 'ветер', emoji: '💨', errors: [{ wrong: `ви${a}тер`, hasError: true }, { wrong: `ве${a}тер`, hasError: false }] },
 ];
 
 type GameState = 'menu' | 'shop' | 'showing' | 'guessing' | 'result' | 'final';
@@ -66,16 +69,16 @@ function App() {
   });
   const [score, setScore] = useState(0);
   const [mistakes, setMistakes] = useState(0);
-  const [showCorrectWord, setShowCorrectWord] = useState(true);
   const [currentErrorVariant, setCurrentErrorVariant] = useState(0);
   const [feedback, setFeedback] = useState<'correct' | 'wrong' | null>(null);
   const [showConfetti, setShowConfetti] = useState(false);
   const [totalEarned, setTotalEarned] = useState(0);
   const [streak, setStreak] = useState(0);
+  const [bestStreak, setBestStreak] = useState(0);
   const [wordsOrder, setWordsOrder] = useState<number[]>([]);
   const [showHint, setShowHint] = useState(false);
-  const [gameStarted, setGameStarted] = useState(false);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [showMoneyAnim, setShowMoneyAnim] = useState<{ amount: number; key: number } | null>(null);
+  const [cardFlip, setCardFlip] = useState(false);
 
   useEffect(() => {
     localStorage.setItem('dictation_money', money.toString());
@@ -94,28 +97,6 @@ function App() {
     return shuffled;
   }, []);
 
-  const startShowingPhase = useCallback(() => {
-    setShowCorrectWord(true);
-    setCurrentErrorVariant(Math.random() > 0.5 ? 1 : 0);
-    setShowHint(false);
-    setFeedback(null);
-    setGameState('showing');
-    playShowSound();
-
-    if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => {
-      setShowCorrectWord(false);
-      setGameState('guessing');
-    }, 3500);
-  }, []);
-
-  // Очистка таймера при размонтировании
-  useEffect(() => {
-    return () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-    };
-  }, []);
-
   const startGame = () => {
     resumeAudio();
     const shuffled = shuffleWords();
@@ -124,43 +105,47 @@ function App() {
     setScore(0);
     setMistakes(0);
     setStreak(0);
+    setBestStreak(0);
     setTotalEarned(0);
-    setGameStarted(true);
-    startShowingPhase();
+    setCurrentErrorVariant(Math.random() > 0.5 ? 1 : 0);
+    setShowHint(false);
+    setFeedback(null);
+    setCardFlip(false);
+    setGameState('showing');
+    playShowSound();
+  };
+
+  const goToGuessing = () => {
+    playClickSound();
+    setCardFlip(true);
+    setTimeout(() => {
+      setGameState('guessing');
+      setCardFlip(false);
+    }, 400);
   };
 
   const handleAnswer = (thinksHasErrors: boolean) => {
-    if (timerRef.current) clearTimeout(timerRef.current);
-
+    playClickSound();
     const wordIndex = wordsOrder[currentWordIndex];
     const word = WORDS[wordIndex];
     const errorData = word.errors[currentErrorVariant];
-    const actuallyHasErrors = errorData.errorPositions.length > 0;
+    const actuallyHasErrors = errorData.hasError;
 
-    if (thinksHasErrors && actuallyHasErrors) {
-      // Нашёл ошибки верно
+    if (thinksHasErrors === actuallyHasErrors) {
       setFeedback('correct');
-      const reward = streak >= 3 ? 10 : 5;
+      const reward = streak >= 2 ? 10 : 5;
       setMoney(prev => prev + reward);
       setTotalEarned(prev => prev + reward);
       setScore(prev => prev + 1);
-      setStreak(prev => prev + 1);
+      const newStreak = streak + 1;
+      setStreak(newStreak);
+      if (newStreak > bestStreak) setBestStreak(newStreak);
       setShowConfetti(true);
+      setShowMoneyAnim({ amount: reward, key: Date.now() });
       playCorrectSound();
-      setTimeout(() => { setShowConfetti(false); playCoinSound(); }, 1500);
-    } else if (!thinksHasErrors && !actuallyHasErrors) {
-      // Сказал что ошибок нет и их правда нет
-      setFeedback('correct');
-      const reward = streak >= 3 ? 10 : 5;
-      setMoney(prev => prev + reward);
-      setTotalEarned(prev => prev + reward);
-      setScore(prev => prev + 1);
-      setStreak(prev => prev + 1);
-      setShowConfetti(true);
-      playCorrectSound();
-      setTimeout(() => { setShowConfetti(false); playCoinSound(); }, 1500);
+      setTimeout(() => { setShowConfetti(false); playCoinSound(); }, 1200);
+      setTimeout(() => setShowMoneyAnim(null), 2000);
     } else {
-      // Ошибка
       setFeedback('wrong');
       setMoney(prev => Math.max(0, prev - 3));
       setMistakes(prev => prev + 1);
@@ -173,25 +158,39 @@ function App() {
 
   const useHint = () => {
     if (hints > 0) {
+      playClickSound();
       setHints(prev => prev - 1);
       setShowHint(true);
     }
   };
 
   const nextWord = () => {
+    playClickSound();
     if (currentWordIndex + 1 >= wordsOrder.length) {
       setGameState('final');
-      setGameStarted(false);
     } else {
       setCurrentWordIndex(prev => prev + 1);
-      startShowingPhase();
+      setCurrentErrorVariant(Math.random() > 0.5 ? 1 : 0);
+      setShowHint(false);
+      setFeedback(null);
+      setGameState('showing');
+      playShowSound();
     }
   };
 
   const buyHint = () => {
     if (money >= 15) {
+      playCoinSound();
       setMoney(prev => prev - 15);
       setHints(prev => prev + 1);
+    }
+  };
+
+  const buyHintPack = () => {
+    if (money >= 40) {
+      playCoinSound();
+      setMoney(prev => prev - 40);
+      setHints(prev => prev + 3);
     }
   };
 
@@ -200,122 +199,138 @@ function App() {
     setHints(3);
     localStorage.setItem('dictation_money', '0');
     localStorage.setItem('dictation_hints', '3');
-    setGameState('menu');
   };
 
   const currentWord = wordsOrder.length > 0 && wordsOrder[currentWordIndex] !== undefined ? WORDS[wordsOrder[currentWordIndex]] : null;
-  const displayedWord = currentWord ? (showCorrectWord ? currentWord.correct : currentWord.errors[currentErrorVariant].wrong) : '';
-  const hasErrors = currentWord ? currentWord.errors[currentErrorVariant].errorPositions.length > 0 : false;
+  const displayedWord = currentWord ? (gameState === 'showing' ? currentWord.correct : currentWord.errors[currentErrorVariant].wrong) : '';
+  const hasErrors = currentWord ? currentWord.errors[currentErrorVariant].hasError : false;
+  const progress = wordsOrder.length > 0 ? ((currentWordIndex) / wordsOrder.length) * 100 : 0;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-900 via-indigo-900 to-blue-900 text-white overflow-hidden relative">
-      {/* Звёзды на фоне */}
-      <div className="fixed inset-0 pointer-events-none">
-        {Array.from({ length: 50 }).map((_, i) => (
+    <div className="min-h-screen bg-gradient-to-br from-[#0f0c29] via-[#302b63] to-[#24243e] text-white overflow-hidden relative">
+      {/* Animated background */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden">
+        <div className="absolute top-0 left-0 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl animate-pulse" />
+        <div className="absolute bottom-0 right-0 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
+        <div className="absolute top-1/2 left-1/2 w-64 h-64 bg-pink-500/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '2s' }} />
+        {Array.from({ length: 40 }).map((_, i) => (
           <div
             key={i}
-            className="absolute rounded-full bg-white animate-pulse"
+            className="absolute rounded-full bg-white/60 animate-twinkle"
             style={{
               width: Math.random() * 3 + 1 + 'px',
               height: Math.random() * 3 + 1 + 'px',
               top: Math.random() * 100 + '%',
               left: Math.random() * 100 + '%',
-              animationDelay: Math.random() * 3 + 's',
-              animationDuration: Math.random() * 2 + 1 + 's',
+              animationDelay: Math.random() * 5 + 's',
+              animationDuration: Math.random() * 3 + 2 + 's',
             }}
           />
         ))}
       </div>
 
-      {/* Конфетти */}
+      {/* Confetti */}
       {showConfetti && <Confetti />}
 
-      {/* Верхняя панель */}
-      {gameState !== 'menu' && gameState !== 'shop' && gameState !== 'final' && (
-        <div className="fixed top-0 left-0 right-0 z-50 bg-black/30 backdrop-blur-sm p-3 flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <div className="bg-yellow-500/20 border border-yellow-400/50 rounded-full px-3 py-1 flex items-center gap-1">
-              <span className="text-lg">💰</span>
-              <span className="font-bold text-yellow-300 text-sm">{money} ₽</span>
-            </div>
-            <div className="bg-blue-500/20 border border-blue-400/50 rounded-full px-3 py-1 flex items-center gap-1">
-              <span className="text-lg">💡</span>
-              <span className="font-bold text-blue-300 text-sm">{hints}</span>
-            </div>
+      {/* Money animation */}
+      {showMoneyAnim && (
+        <div key={showMoneyAnim.key} className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[100] pointer-events-none">
+          <div className="text-5xl font-black text-yellow-300 animate-money-pop drop-shadow-[0_0_20px_rgba(255,215,0,0.8)]">
+            +{showMoneyAnim.amount} ₽ 💰
           </div>
-          <div className="flex items-center gap-3">
-            {streak >= 3 && (
-              <div className="bg-orange-500/20 border border-orange-400/50 rounded-full px-3 py-1 animate-bounce">
-                <span className="text-sm font-bold text-orange-300">🔥 x{streak}</span>
+        </div>
+      )}
+
+      {/* Top HUD */}
+      {gameState !== 'menu' && gameState !== 'shop' && gameState !== 'final' && (
+        <div className="fixed top-0 left-0 right-0 z-50">
+          {/* Progress bar */}
+          <div className="h-1.5 bg-white/10">
+            <div 
+              className="h-full bg-gradient-to-r from-green-400 via-emerald-400 to-cyan-400 transition-all duration-500 ease-out shadow-[0_0_10px_rgba(52,211,153,0.5)]"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+          <div className="bg-black/40 backdrop-blur-xl border-b border-white/10 px-4 py-2.5 flex justify-between items-center">
+            <div className="flex items-center gap-2">
+              <div className="bg-gradient-to-r from-yellow-500/20 to-amber-500/20 border border-yellow-400/40 rounded-full px-3 py-1.5 flex items-center gap-1.5 shadow-inner">
+                <span className="text-base">💰</span>
+                <span className="font-black text-yellow-300 text-sm tabular-nums">{money} ₽</span>
               </div>
-            )}
-            <div className="bg-green-500/20 border border-green-400/50 rounded-full px-3 py-1">
-              <span className="font-bold text-green-300 text-sm">{currentWordIndex + 1}/{wordsOrder.length}</span>
+              <div className="bg-gradient-to-r from-blue-500/20 to-cyan-500/20 border border-blue-400/40 rounded-full px-3 py-1.5 flex items-center gap-1.5">
+                <span className="text-base">💡</span>
+                <span className="font-black text-blue-300 text-sm">{hints}</span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {streak >= 2 && (
+                <div className="bg-gradient-to-r from-orange-500/20 to-red-500/20 border border-orange-400/40 rounded-full px-3 py-1.5 animate-pulse">
+                  <span className="text-sm font-black text-orange-300">🔥 x{streak}</span>
+                </div>
+              )}
+              <div className="bg-white/10 border border-white/20 rounded-full px-3 py-1.5">
+                <span className="font-bold text-white/80 text-sm">{currentWordIndex + 1}<span className="text-white/40">/{wordsOrder.length}</span></span>
+              </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Меню */}
+      {/* ============ MENU ============ */}
       {gameState === 'menu' && (
-        <div className="min-h-screen flex flex-col items-center justify-center p-4">
-          <div className="text-center mb-8">
-            <div className="text-7xl mb-4 animate-bounce-slow">📝</div>
-            <h1 className="text-4xl md:text-6xl font-bold mb-4 bg-gradient-to-r from-yellow-300 via-pink-300 to-purple-300 bg-clip-text text-transparent">
-              Диктант-Квест
+        <div className="min-h-screen flex flex-col items-center justify-center p-4 relative">
+          <div className="text-center mb-8 animate-fade-in-up">
+            <div className="relative inline-block mb-6">
+              <div className="text-8xl animate-float">📝</div>
+              <div className="absolute -top-2 -right-4 text-3xl animate-spin-slow">✨</div>
+              <div className="absolute -bottom-1 -left-3 text-2xl animate-bounce" style={{ animationDelay: '0.5s' }}>⭐</div>
+            </div>
+            <h1 className="text-5xl md:text-7xl font-black mb-3">
+              <span className="bg-gradient-to-r from-yellow-200 via-pink-200 to-purple-200 bg-clip-text text-transparent drop-shadow-lg">
+                Диктант
+              </span>
+              <br />
+              <span className="bg-gradient-to-r from-cyan-200 to-blue-200 bg-clip-text text-transparent">
+                Квест
+              </span>
             </h1>
-            <p className="text-lg md:text-xl text-purple-200">
-              Подготовка к диктанту для 1 класса ✨
+            <p className="text-lg text-purple-200/80 font-medium">
+              Подготовка к диктанту • 1 класс
             </p>
           </div>
 
-          <div className="bg-white/10 backdrop-blur-md rounded-3xl p-6 md:p-8 max-w-md w-full border border-white/20 shadow-2xl">
-            <div className="space-y-3 mb-6">
-              <div className="flex items-center gap-3 bg-green-500/20 rounded-xl p-3">
-                <span className="text-2xl">✅</span>
-                <div>
-                  <span className="text-green-200 font-bold">Нашёл ошибку</span>
-                  <span className="text-green-300 ml-2">→ +5 ₽</span>
-                </div>
-              </div>
-              <div className="flex items-center gap-3 bg-orange-500/20 rounded-xl p-3">
-                <span className="text-2xl">🔥</span>
-                <div>
-                  <span className="text-orange-200 font-bold">Серия 3+</span>
-                  <span className="text-orange-300 ml-2">→ +10 ₽</span>
-                </div>
-              </div>
-              <div className="flex items-center gap-3 bg-red-500/20 rounded-xl p-3">
-                <span className="text-2xl">❌</span>
-                <div>
-                  <span className="text-red-200 font-bold">Ошибка</span>
-                  <span className="text-red-300 ml-2">→ -3 ₽</span>
-                </div>
-              </div>
-              <div className="flex items-center gap-3 bg-blue-500/20 rounded-xl p-3">
-                <span className="text-2xl">💡</span>
-                <div>
-                  <span className="text-blue-200 font-bold">Подсказка</span>
-                  <span className="text-blue-300 ml-2">→ бесплатно (3 шт)</span>
-                </div>
-              </div>
+          <div className="glass-card max-w-sm w-full animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
+            <div className="space-y-2.5 mb-5">
+              <RuleRow emoji="✅" bg="from-green-500/20 to-emerald-500/20" border="border-green-400/30" text="Правильно" reward="+5 ₽" textColor="text-green-200" rewardColor="text-green-300" />
+              <RuleRow emoji="🔥" bg="from-orange-500/20 to-red-500/20" border="border-orange-400/30" text="Серия 3+" reward="+10 ₽" textColor="text-orange-200" rewardColor="text-orange-300" />
+              <RuleRow emoji="❌" bg="from-red-500/20 to-pink-500/20" border="border-red-400/30" text="Ошибка" reward="-3 ₽" textColor="text-red-200" rewardColor="text-red-300" />
+              <RuleRow emoji="💡" bg="from-blue-500/20 to-cyan-500/20" border="border-blue-400/30" text="Подсказка" reward="бесплатно" textColor="text-blue-200" rewardColor="text-blue-300" />
             </div>
 
-            <div className="text-center mb-6 bg-white/5 rounded-xl p-4">
-              <p className="text-yellow-300 text-xl font-bold mb-1">💰 Баланс: {money} ₽</p>
-              <p className="text-blue-300">💡 Подсказок: {hints}</p>
+            <div className="bg-white/5 rounded-2xl p-4 mb-5 border border-white/10">
+              <div className="flex justify-between items-center">
+                <div>
+                  <p className="text-sm text-white/50">Баланс</p>
+                  <p className="text-2xl font-black text-yellow-300">{money} ₽</p>
+                </div>
+                <div className="w-px h-10 bg-white/10" />
+                <div className="text-center">
+                  <p className="text-sm text-white/50">Подсказки</p>
+                  <p className="text-2xl font-black text-blue-300">{hints} 💡</p>
+                </div>
+              </div>
             </div>
 
             <button
               onClick={startGame}
-              className="w-full bg-gradient-to-r from-green-400 to-emerald-500 hover:from-green-500 hover:to-emerald-600 text-white font-bold text-xl py-4 rounded-2xl transform hover:scale-105 transition-all duration-200 shadow-lg shadow-green-500/30 active:scale-95"
+              className="w-full btn-primary text-lg py-4 mb-3"
             >
               🚀 Начать игру!
             </button>
 
             <button
-              onClick={() => setGameState('shop')}
-              className="w-full mt-3 bg-gradient-to-r from-blue-400 to-cyan-500 hover:from-blue-500 hover:to-cyan-600 text-white font-bold text-lg py-3 rounded-2xl transform hover:scale-105 transition-all duration-200 shadow-lg shadow-blue-500/30 active:scale-95"
+              onClick={() => { resumeAudio(); playClickSound(); setGameState('shop'); }}
+              className="w-full btn-secondary text-base py-3 mb-3"
             >
               🛒 Магазин
             </button>
@@ -323,7 +338,7 @@ function App() {
             {money > 0 && (
               <button
                 onClick={resetGame}
-                className="w-full mt-3 bg-red-500/20 border border-red-400/50 hover:bg-red-500/30 text-red-200 font-bold py-2 rounded-xl transition-all"
+                className="w-full text-red-300/60 hover:text-red-300 text-sm py-2 transition-colors"
               >
                 🔄 Сбросить прогресс
               </button>
@@ -332,208 +347,186 @@ function App() {
         </div>
       )}
 
-      {/* Магазин */}
+      {/* ============ SHOP ============ */}
       {gameState === 'shop' && (
         <div className="min-h-screen flex flex-col items-center justify-center p-4">
-          <div className="text-center mb-8">
+          <div className="text-center mb-8 animate-fade-in-up">
             <div className="text-7xl mb-4">🛒</div>
-            <h1 className="text-4xl font-bold mb-2 bg-gradient-to-r from-blue-300 to-cyan-300 bg-clip-text text-transparent">
+            <h1 className="text-4xl font-black bg-gradient-to-r from-blue-200 to-cyan-200 bg-clip-text text-transparent">
               Магазин
             </h1>
-            <p className="text-lg text-blue-200">💰 Баланс: {money} ₽</p>
+            <p className="text-lg text-white/60 mt-2">💰 Баланс: <span className="text-yellow-300 font-bold">{money} ₽</span></p>
           </div>
 
-          <div className="bg-white/10 backdrop-blur-md rounded-3xl p-6 md:p-8 max-w-md w-full border border-white/20 shadow-2xl">
-            <div className="space-y-4">
-              <div className="bg-blue-500/20 border border-blue-400/30 rounded-2xl p-5">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-3">
-                    <span className="text-4xl">💡</span>
-                    <div>
-                      <h3 className="text-lg font-bold text-blue-200">Подсказка</h3>
-                      <p className="text-sm text-blue-300">Покажет есть ли ошибка</p>
-                    </div>
-                  </div>
-                  <span className="text-yellow-300 font-bold text-lg">15 ₽</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-blue-300 text-sm">У тебя: {hints} шт.</span>
-                  <button
-                    onClick={buyHint}
-                    disabled={money < 15}
-                    className={`px-6 py-2 rounded-xl font-bold transition-all ${
-                      money >= 15
-                        ? 'bg-gradient-to-r from-blue-400 to-cyan-500 hover:from-blue-500 hover:to-cyan-600 text-white transform hover:scale-105 active:scale-95'
-                        : 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                    }`}
-                  >
-                    Купить
-                  </button>
-                </div>
-              </div>
-
-              <div className="bg-purple-500/20 border border-purple-400/30 rounded-2xl p-5">
-                <div className="flex items-center gap-3 mb-3">
-                  <span className="text-4xl">🎁</span>
-                  <div>
-                    <h3 className="text-lg font-bold text-purple-200">Бонус подсказок</h3>
-                    <p className="text-sm text-purple-300">+3 подсказки за раз</p>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-yellow-300 font-bold text-lg">40 ₽</span>
-                  <button
-                    onClick={() => { if (money >= 40) { setMoney(prev => prev - 40); setHints(prev => prev + 3); }}}
-                    disabled={money < 40}
-                    className={`px-6 py-2 rounded-xl font-bold transition-all ${
-                      money >= 40
-                        ? 'bg-gradient-to-r from-purple-400 to-pink-500 hover:from-purple-500 hover:to-pink-600 text-white transform hover:scale-105 active:scale-95'
-                        : 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                    }`}
-                  >
-                    Купить
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <button
-              onClick={() => setGameState('menu')}
-              className="w-full mt-6 bg-white/10 border border-white/20 hover:bg-white/20 text-white font-bold py-3 rounded-xl transition-all"
-            >
-              ← Назад
-            </button>
+          <div className="glass-card max-w-sm w-full space-y-4 animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
+            <ShopItem
+              emoji="💡"
+              title="Подсказка"
+              desc="Покажет, есть ли ошибка"
+              price={15}
+              owned={hints}
+              canBuy={money >= 15}
+              gradient="from-blue-500/20 to-cyan-500/20"
+              border="border-blue-400/30"
+              onBuy={buyHint}
+            />
+            <ShopItem
+              emoji="🎁"
+              title="Набор подсказок"
+              desc="+3 подсказки сразу"
+              price={40}
+              owned={hints}
+              canBuy={money >= 40}
+              gradient="from-purple-500/20 to-pink-500/20"
+              border="border-purple-400/30"
+              onBuy={buyHintPack}
+              isPack
+            />
           </div>
+
+          <button
+            onClick={() => { playClickSound(); setGameState('menu'); }}
+            className="mt-6 btn-secondary px-8 py-3 animate-fade-in-up"
+            style={{ animationDelay: '0.2s' }}
+          >
+            ← Назад в меню
+          </button>
         </div>
       )}
 
-      {/* Фаза показа слова */}
+      {/* ============ SHOWING ============ */}
       {gameState === 'showing' && currentWord && (
-        <div className="min-h-screen flex flex-col items-center justify-center p-4 pt-20">
-          <div className="text-center mb-8">
-            <div className="text-xl md:text-2xl text-purple-200 mb-3">📖 Запомни слово:</div>
-            <div className="bg-yellow-500/20 border-2 border-yellow-400/50 rounded-2xl px-6 py-2 inline-block animate-pulse">
-              <span className="text-yellow-300 font-bold text-lg">Запоминай! ⏱️ 3 сек</span>
+        <div className="min-h-screen flex flex-col items-center justify-center p-4 pt-24">
+          <div className="text-center mb-6 animate-fade-in-up">
+            <div className="inline-flex items-center gap-2 bg-yellow-500/15 border border-yellow-400/30 rounded-full px-5 py-2 mb-4">
+              <span className="text-lg">📖</span>
+              <span className="text-yellow-200 font-bold">Запомни слово!</span>
             </div>
           </div>
 
-          <div className="relative">
-            <div className="text-6xl md:text-7xl mb-6 animate-float">{currentWord.emoji}</div>
-            <div className="bg-white/10 backdrop-blur-md rounded-3xl px-8 md:px-12 py-6 md:py-8 border-2 border-yellow-400/30 shadow-2xl shadow-yellow-500/20 animate-glow">
-              <div className="text-4xl md:text-6xl font-bold tracking-wider text-white">
-                {displayedWord.split('').map((letter, i) => (
-                  <span key={i} className="inline-block animate-pop" style={{ animationDelay: `${i * 0.1}s` }}>
-                    {letter}
-                  </span>
-                ))}
+          <div className={`relative transition-all duration-500 ${cardFlip ? 'scale-90 opacity-0 rotate-y-180' : 'scale-100 opacity-100'}`}>
+            <div className="text-7xl md:text-8xl mb-6 animate-float">{currentWord.emoji}</div>
+            
+            <div className="word-card-showing">
+              <div className="text-4xl md:text-6xl font-black tracking-wider text-white animate-word-appear">
+                {displayedWord}
+              </div>
+              <div className="mt-4 text-sm text-white/40 font-medium">
+                {currentWord.correctPlain.length} букв
               </div>
             </div>
           </div>
 
-          <div className="mt-8">
-            <div className="w-48 h-3 bg-white/20 rounded-full overflow-hidden">
-              <div className="h-full bg-gradient-to-r from-yellow-400 to-orange-400 rounded-full animate-shrink" style={{ animationDuration: '3.5s' }} />
-            </div>
-          </div>
+          <button
+            onClick={goToGuessing}
+            className="mt-10 btn-primary text-lg px-10 py-4 animate-fade-in-up"
+            style={{ animationDelay: '0.3s' }}
+          >
+            Далее → Проверка
+          </button>
         </div>
       )}
 
-      {/* Фаза угадывания */}
+      {/* ============ GUESSING ============ */}
       {gameState === 'guessing' && currentWord && (
-        <div className="min-h-screen flex flex-col items-center justify-center p-4 pt-20">
-          <div className="text-center mb-6">
-            <div className="text-xl md:text-2xl text-purple-200 mb-3">🔍 Есть ли ошибки в этом слове?</div>
+        <div className="min-h-screen flex flex-col items-center justify-center p-4 pt-24">
+          <div className="text-center mb-6 animate-fade-in-up">
+            <div className="inline-flex items-center gap-2 bg-purple-500/15 border border-purple-400/30 rounded-full px-5 py-2 mb-3">
+              <span className="text-lg">🔍</span>
+              <span className="text-purple-200 font-bold">Есть ли ошибки?</span>
+            </div>
             {showHint && (
-              <div className="bg-blue-500/20 border border-blue-400/50 rounded-xl px-4 py-2 mt-2 animate-pulse">
-                <span className="text-blue-200 font-bold">💡 {hasErrors ? 'В слове ЕСТЬ ошибка!' : 'Слово написано ПРАВИЛЬНО!'}</span>
+              <div className="mt-3 bg-blue-500/20 border border-blue-400/40 rounded-xl px-4 py-2 animate-pulse">
+                <span className="text-blue-200 font-bold">
+                  💡 {hasErrors ? 'В слове ЕСТЬ ошибка!' : 'Слово написано ПРАВИЛЬНО!'}
+                </span>
               </div>
             )}
           </div>
 
-          <div className="relative mb-8">
+          <div className="relative mb-8 animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
             <div className="text-6xl mb-4">{currentWord.emoji}</div>
-            <div className="bg-white/10 backdrop-blur-md rounded-3xl px-8 md:px-12 py-6 md:py-8 border-2 border-purple-400/30 shadow-2xl">
-              <div className="text-4xl md:text-6xl font-bold tracking-wider text-white">
-                {displayedWord.split('').map((letter, i) => (
-                  <span key={i} className="inline-block hover:scale-125 transition-transform cursor-default">
-                    {letter}
-                  </span>
-                ))}
+            <div className="word-card-guessing">
+              <div className="text-4xl md:text-6xl font-black tracking-wider text-white">
+                {displayedWord}
               </div>
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-4 w-full max-w-lg">
+          <div className="flex flex-col sm:flex-row gap-4 w-full max-w-lg animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
             <button
-              onClick={() => { playClickSound(); handleAnswer(true); }}
-              className="flex-1 bg-gradient-to-r from-red-400 to-pink-500 hover:from-red-500 hover:to-pink-600 text-white font-bold text-lg md:text-xl py-5 rounded-2xl transform hover:scale-105 transition-all duration-200 shadow-lg shadow-red-500/30 active:scale-95"
+              onClick={() => handleAnswer(true)}
+              className="flex-1 btn-danger text-lg py-5"
             >
-              ❌ Есть ошибки!
+              <span className="text-2xl block mb-1">❌</span>
+              Есть ошибки!
             </button>
             <button
-              onClick={() => { playClickSound(); handleAnswer(false); }}
-              className="flex-1 bg-gradient-to-r from-green-400 to-emerald-500 hover:from-green-500 hover:to-emerald-600 text-white font-bold text-lg md:text-xl py-5 rounded-2xl transform hover:scale-105 transition-all duration-200 shadow-lg shadow-green-500/30 active:scale-95"
+              onClick={() => handleAnswer(false)}
+              className="flex-1 btn-success text-lg py-5"
             >
-              ✅ Всё верно!
+              <span className="text-2xl block mb-1">✅</span>
+              Всё верно!
             </button>
           </div>
 
           {hints > 0 && !showHint && (
             <button
               onClick={useHint}
-              className="mt-6 bg-blue-500/20 border border-blue-400/50 hover:bg-blue-500/30 text-blue-200 font-bold py-3 px-6 rounded-xl transition-all flex items-center gap-2 active:scale-95"
+              className="mt-6 btn-hint animate-fade-in-up"
+              style={{ animationDelay: '0.3s' }}
             >
-              💡 Подсказка ({hints} осталось)
+              💡 Подсказка <span className="text-blue-300/60">({hints} ост.)</span>
             </button>
           )}
         </div>
       )}
 
-      {/* Результат */}
+      {/* ============ RESULT ============ */}
       {gameState === 'result' && currentWord && (
-        <div className="min-h-screen flex flex-col items-center justify-center p-4 pt-20">
+        <div className="min-h-screen flex flex-col items-center justify-center p-4 pt-24">
           {feedback === 'correct' ? (
-            <div className="text-center">
-              <div className="text-7xl md:text-8xl mb-4 animate-bounce">🎉</div>
-              <h2 className="text-3xl md:text-4xl font-bold text-green-300 mb-4">Молодец!</h2>
-              <div className="bg-green-500/20 border border-green-400/50 rounded-2xl p-6 mb-6 max-w-sm">
-                <p className="text-lg text-green-200 mb-2">Правильное написание:</p>
-                <p className="text-3xl md:text-4xl font-bold text-white tracking-wider">{currentWord.correct}</p>
-                {hasErrors && (
-                  <div className="mt-3">
-                    <p className="text-base text-green-300">
-                      Было с ошибкой: <span className="text-red-300 line-through">{displayedWord}</span>
-                    </p>
+            <div className="text-center animate-fade-in-up">
+              <div className="text-7xl md:text-8xl mb-4 animate-bounce-big">🎉</div>
+              <h2 className="text-3xl md:text-4xl font-black text-green-300 mb-6">Молодец!</h2>
+              <div className="glass-card-result border-green-400/30 bg-green-500/10 max-w-sm">
+                <p className="text-sm text-green-200/70 mb-2 uppercase tracking-wider font-bold">Правильно:</p>
+                <p className="text-3xl md:text-4xl font-black text-white tracking-wider mb-3">{currentWord.correct}</p>
+                {hasErrors ? (
+                  <div className="bg-red-500/10 rounded-xl p-3 border border-red-400/20">
+                    <p className="text-sm text-red-200/70 mb-1">Было с ошибкой:</p>
+                    <p className="text-xl font-bold text-red-300 line-through decoration-2">{displayedWord}</p>
+                  </div>
+                ) : (
+                  <div className="bg-green-500/10 rounded-xl p-3 border border-green-400/20">
+                    <p className="text-green-200">✨ Слово было написано верно!</p>
                   </div>
                 )}
-                {!hasErrors && (
-                  <p className="text-base text-green-300 mt-3">Слово было написано верно!</p>
-                )}
               </div>
-              <div className="text-3xl font-bold text-yellow-300 animate-pulse">
+              <div className="mt-6 text-3xl font-black text-yellow-300 animate-pulse">
                 +{streak >= 3 ? 10 : 5} ₽ 💰
-                {streak >= 3 && <span className="text-orange-400 ml-2">🔥 Бонус серии!</span>}
+                {streak >= 3 && <span className="text-orange-400 ml-2 text-lg">🔥 Серия!</span>}
               </div>
             </div>
           ) : (
-            <div className="text-center">
+            <div className="text-center animate-fade-in-up">
               <div className="text-7xl md:text-8xl mb-4">😔</div>
-              <h2 className="text-3xl md:text-4xl font-bold text-red-300 mb-4">Неправильно!</h2>
-              <div className="bg-red-500/20 border border-red-400/50 rounded-2xl p-6 mb-6 max-w-sm">
-                <p className="text-lg text-red-200 mb-2">Запомни правильное написание:</p>
-                <p className="text-3xl md:text-4xl font-bold text-white tracking-wider">{currentWord.correct}</p>
-                {hasErrors && (
-                  <div className="mt-3">
-                    <p className="text-base text-red-300">
-                      Было: <span className="text-red-400 font-bold">{displayedWord}</span>
-                    </p>
+              <h2 className="text-3xl md:text-4xl font-black text-red-300 mb-6">Неправильно!</h2>
+              <div className="glass-card-result border-red-400/30 bg-red-500/10 max-w-sm">
+                <p className="text-sm text-red-200/70 mb-2 uppercase tracking-wider font-bold">Запомни:</p>
+                <p className="text-3xl md:text-4xl font-black text-white tracking-wider mb-3">{currentWord.correct}</p>
+                {hasErrors ? (
+                  <div className="bg-red-500/10 rounded-xl p-3 border border-red-400/20">
+                    <p className="text-sm text-red-200/70 mb-1">Было:</p>
+                    <p className="text-xl font-bold text-red-300">{displayedWord}</p>
+                  </div>
+                ) : (
+                  <div className="bg-red-500/10 rounded-xl p-3 border border-red-400/20">
+                    <p className="text-red-200">Слово было написано правильно!</p>
                   </div>
                 )}
-                {!hasErrors && (
-                  <p className="text-base text-red-300 mt-3">Слово было написано правильно, а ты сказал что с ошибкой!</p>
-                )}
               </div>
-              <div className="text-3xl font-bold text-red-300">
+              <div className="mt-6 text-3xl font-black text-red-300">
                 -3 ₽ 💸
               </div>
             </div>
@@ -541,78 +534,62 @@ function App() {
 
           <button
             onClick={nextWord}
-            className="mt-8 bg-gradient-to-r from-purple-400 to-indigo-500 hover:from-purple-500 hover:to-indigo-600 text-white font-bold text-xl py-4 px-12 rounded-2xl transform hover:scale-105 transition-all duration-200 shadow-lg shadow-purple-500/30 active:scale-95"
+            className="mt-8 btn-primary text-lg px-10 py-4 animate-fade-in-up"
+            style={{ animationDelay: '0.3s' }}
           >
             {currentWordIndex + 1 >= wordsOrder.length ? '🏆 Результаты' : '➡️ Дальше'}
           </button>
         </div>
       )}
 
-      {/* Финальный экран */}
+      {/* ============ FINAL ============ */}
       {gameState === 'final' && (
         <div className="min-h-screen flex flex-col items-center justify-center p-4">
-          <div className="text-center mb-6">
-            <div className="text-7xl md:text-8xl mb-4 animate-bounce">🏆</div>
-            <h1 className="text-4xl md:text-5xl font-bold mb-4 bg-gradient-to-r from-yellow-300 to-orange-300 bg-clip-text text-transparent">
+          <div className="text-center mb-6 animate-fade-in-up">
+            <div className="text-8xl mb-4 animate-bounce-big">🏆</div>
+            <h1 className="text-4xl md:text-5xl font-black bg-gradient-to-r from-yellow-200 to-orange-200 bg-clip-text text-transparent">
               Игра окончена!
             </h1>
           </div>
 
-          <div className="bg-white/10 backdrop-blur-md rounded-3xl p-6 md:p-8 max-w-md w-full border border-white/20 shadow-2xl">
+          <div className="glass-card max-w-sm w-full animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
             <div className="space-y-3 mb-6">
-              <div className="flex justify-between items-center bg-green-500/20 rounded-xl p-4">
-                <span className="text-base md:text-lg">✅ Правильных:</span>
-                <span className="text-2xl font-bold text-green-300">{score}/{wordsOrder.length}</span>
-              </div>
-              <div className="flex justify-between items-center bg-red-500/20 rounded-xl p-4">
-                <span className="text-base md:text-lg">❌ Ошибок:</span>
-                <span className="text-2xl font-bold text-red-300">{mistakes}</span>
-              </div>
-              <div className="flex justify-between items-center bg-yellow-500/20 rounded-xl p-4">
-                <span className="text-base md:text-lg">💰 Заработано:</span>
-                <span className="text-2xl font-bold text-yellow-300">{totalEarned} ₽</span>
-              </div>
-              <div className="flex justify-between items-center bg-purple-500/20 rounded-xl p-4">
-                <span className="text-base md:text-lg">💰 Баланс:</span>
-                <span className="text-2xl font-bold text-purple-300">{money} ₽</span>
-              </div>
+              <StatRow label="Правильных" value={`${score}/${wordsOrder.length}`} color="green" />
+              <StatRow label="Ошибок" value={`${mistakes}`} color="red" />
+              <StatRow label="Лучшая серия" value={`🔥 x${bestStreak}`} color="orange" />
+              <StatRow label="Заработано" value={`${totalEarned} ₽`} color="yellow" />
+              <StatRow label="Баланс" value={`${money} ₽`} color="purple" />
             </div>
 
-            <div className="text-center mb-6 bg-white/5 rounded-xl p-4">
+            <div className="text-center bg-white/5 rounded-2xl p-5 mb-6 border border-white/10">
               {score >= 35 ? (
                 <>
-                  <div className="text-4xl mb-2">🌟🌟🌟</div>
-                  <p className="text-xl text-yellow-200 font-bold">Отлично! Ты мастер орфографии!</p>
+                  <div className="text-5xl mb-2">🌟🌟🌟</div>
+                  <p className="text-lg text-yellow-200 font-bold">Мастер орфографии!</p>
                 </>
               ) : score >= 25 ? (
                 <>
-                  <div className="text-4xl mb-2">🌟🌟</div>
-                  <p className="text-xl text-yellow-200 font-bold">Очень хорошо! Так держать!</p>
+                  <div className="text-5xl mb-2">🌟🌟</div>
+                  <p className="text-lg text-yellow-200 font-bold">Отлично! Так держать!</p>
                 </>
               ) : score >= 15 ? (
                 <>
-                  <div className="text-4xl mb-2">🌟</div>
-                  <p className="text-xl text-yellow-200 font-bold">Хорошо! Но можно лучше!</p>
+                  <div className="text-5xl mb-2">🌟</div>
+                  <p className="text-lg text-yellow-200 font-bold">Хорошо! Ещё тренируйся!</p>
                 </>
               ) : (
                 <>
-                  <div className="text-4xl mb-2">💪</div>
-                  <p className="text-xl text-yellow-200 font-bold">Тренируйся ещё!</p>
+                  <div className="text-5xl mb-2">💪</div>
+                  <p className="text-lg text-yellow-200 font-bold">Попробуй ещё раз!</p>
                 </>
               )}
             </div>
 
             <div className="flex gap-3">
-              <button
-                onClick={startGame}
-                className="flex-1 bg-gradient-to-r from-green-400 to-emerald-500 hover:from-green-500 hover:to-emerald-600 text-white font-bold text-lg py-3 rounded-xl transform hover:scale-105 transition-all active:scale-95"
-              >
-                🔄 Ещё раз!
+              <button onClick={startGame} className="flex-1 btn-primary py-3">
+                🔄 Ещё раз
               </button>
-              <button
-                onClick={() => { setGameState('menu'); setGameStarted(false); }}
-                className="flex-1 bg-gradient-to-r from-purple-400 to-indigo-500 hover:from-purple-500 hover:to-indigo-600 text-white font-bold text-lg py-3 rounded-xl transform hover:scale-105 transition-all active:scale-95"
-              >
+              <button onClick={() => { playClickSound(); setGameState('menu'); }} className="flex-1 btn-secondary py-3">
                 🏠 Меню
               </button>
             </div>
@@ -623,26 +600,92 @@ function App() {
   );
 }
 
-// Компонент конфетти
+// ============ SUB-COMPONENTS ============
+
+function RuleRow({ emoji, bg, border, text, reward, textColor, rewardColor }: {
+  emoji: string; bg: string; border: string; text: string; reward: string; textColor: string; rewardColor: string;
+}) {
+  return (
+    <div className={`flex items-center gap-3 bg-gradient-to-r ${bg} border ${border} rounded-xl p-3`}>
+      <span className="text-2xl">{emoji}</span>
+      <div className="flex-1 flex justify-between items-center">
+        <span className={`font-bold ${textColor}`}>{text}</span>
+        <span className={`font-black ${rewardColor}`}>{reward}</span>
+      </div>
+    </div>
+  );
+}
+
+function ShopItem({ emoji, title, desc, price, owned, canBuy, gradient, border, onBuy, isPack }: {
+  emoji: string; title: string; desc: string; price: number; owned: number; canBuy: boolean;
+  gradient: string; border: string; onBuy: () => void; isPack?: boolean;
+}) {
+  return (
+    <div className={`bg-gradient-to-r ${gradient} border ${border} rounded-2xl p-5`}>
+      <div className="flex items-center gap-3 mb-3">
+        <span className="text-4xl">{emoji}</span>
+        <div className="flex-1">
+          <h3 className="font-bold text-lg">{title}</h3>
+          <p className="text-sm text-white/50">{desc}</p>
+        </div>
+        <span className="text-yellow-300 font-black text-lg">{price} ₽</span>
+      </div>
+      <div className="flex items-center justify-between">
+        <span className="text-white/50 text-sm">У тебя: {owned} шт.</span>
+        <button
+          onClick={onBuy}
+          disabled={!canBuy}
+          className={`px-5 py-2 rounded-xl font-bold transition-all ${
+            canBuy
+              ? 'bg-white/20 hover:bg-white/30 text-white transform hover:scale-105 active:scale-95'
+              : 'bg-white/5 text-white/30 cursor-not-allowed'
+          }`}
+        >
+          {isPack ? '+3 шт.' : 'Купить'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function StatRow({ label, value, color }: { label: string; value: string; color: string }) {
+  const colors: Record<string, string> = {
+    green: 'bg-green-500/15 border-green-400/30 text-green-300',
+    red: 'bg-red-500/15 border-red-400/30 text-red-300',
+    orange: 'bg-orange-500/15 border-orange-400/30 text-orange-300',
+    yellow: 'bg-yellow-500/15 border-yellow-400/30 text-yellow-300',
+    purple: 'bg-purple-500/15 border-purple-400/30 text-purple-300',
+  };
+  return (
+    <div className={`flex justify-between items-center ${colors[color]} border rounded-xl p-3.5`}>
+      <span className="font-medium">{label}</span>
+      <span className="text-xl font-black">{value}</span>
+    </div>
+  );
+}
+
 function Confetti() {
   return (
     <div className="fixed inset-0 pointer-events-none z-50">
-      {Array.from({ length: 40 }).map((_, i) => (
+      {Array.from({ length: 50 }).map((_, i) => (
         <div
           key={i}
           className="absolute animate-confetti"
           style={{
             left: Math.random() * 100 + '%',
-            top: '-10px',
-            animationDelay: Math.random() * 0.5 + 's',
-            animationDuration: Math.random() * 2 + 1.5 + 's',
+            top: '-20px',
+            animationDelay: Math.random() * 0.8 + 's',
+            animationDuration: Math.random() * 2 + 2 + 's',
           }}
         >
           <div
-            className="w-3 h-3 rounded-sm"
+            className="rounded-sm"
             style={{
-              backgroundColor: ['#ff6b6b', '#feca57', '#48dbfb', '#ff9ff3', '#54a0ff', '#5f27cd', '#00d2d3', '#ff9f43'][Math.floor(Math.random() * 8)],
+              width: Math.random() * 8 + 6 + 'px',
+              height: Math.random() * 8 + 6 + 'px',
+              backgroundColor: ['#ff6b6b', '#feca57', '#48dbfb', '#ff9ff3', '#54a0ff', '#5f27cd', '#00d2d3', '#ff9f43', '#10ac84', '#ee5a24'][Math.floor(Math.random() * 10)],
               transform: `rotate(${Math.random() * 360}deg)`,
+              borderRadius: Math.random() > 0.5 ? '50%' : '2px',
             }}
           />
         </div>
