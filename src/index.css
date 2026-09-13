@@ -497,7 +497,7 @@ body,
 }
 
 .app-screen-hud {
-  padding-top: calc(5.5rem + env(safe-area-inset-top, 0px));
+  padding-top: calc(6.75rem + env(safe-area-inset-top, 0px));
 }
 
 .play-stage {
@@ -628,8 +628,26 @@ body,
   top: 0;
   left: 0;
   right: 0;
-  z-index: 50;
-  padding-top: env(safe-area-inset-top, 0px);
+  z-index: 80;
+  padding-top: max(12px, env(safe-area-inset-top, 0px));
+}
+
+html.standalone .app-hud {
+  padding-top: max(47px, env(safe-area-inset-top, 0px));
+}
+
+.app-hud-bar {
+  padding-left: max(12px, env(safe-area-inset-left, 0px));
+  padding-right: max(12px, env(safe-area-inset-right, 0px));
+}
+
+.hud-back {
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  padding: 0;
+  font-size: 1.2rem;
+  touch-action: manipulation;
+  pointer-events: auto;
 }
 
 /* Prevent iOS auto-zoom on focus (inputs smaller than 16px trigger it) */
@@ -731,7 +749,9 @@ select {
   backdrop-filter: blur(10px);
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
+  touch-action: manipulation;
 }
 
 .btn-back:hover {

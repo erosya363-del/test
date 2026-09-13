@@ -1,10 +1,11 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   cacheLocal,
   deviceId,
   emptyState,
   hexEncode,
   loadCloud,
+  mergeIncoming,
   newId,
   readLocalCache,
   saveCloud,
@@ -41,115 +42,104 @@ type GameStoreValue = {
 
 const GameStoreContext = createContext<GameStoreValue | null>(null);
 
-function localMoney(): number {
-  const raw = localStorage.getItem("dictation_money");
-  const value = raw ? Number(raw) : 0;
-  return Number.isFinite(value) ? value : 0;
-}
-
 export function GameStoreProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<SharedState>(() => readLocalCache() ?? emptyState());
   const [ready, setReady] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const stateRef = useRef(state);
+  const writeTail = useRef(Promise.resolve());
+  stateRef.current = state;
 
-  const persist = useCallback(async (next: SharedState) => {
+  const adopt = useCallback((next: SharedState) => {
+    stateRef.current = next;
     setState(next);
     cacheLocal(next);
-    setSyncing(true);
-    try {
-      const remote = await loadCloud();
-      if (!remote) {
-        await saveCloud(next);
-        cacheLocal(next);
-        return;
-      }
-      const known = new Set(remote.events.map((event) => event.id));
-      const fresh = next.events.filter((event) => !known.has(event.id));
-      const merged: SharedState = {
-        money: Math.max(0, remote.money + fresh.reduce((sum, event) => sum + event.moneyDelta, 0)),
-        hints: Math.max(0, remote.hints + fresh.reduce((sum, event) => sum + (event.hintDelta ?? 0), 0)),
-        settings: next.settings,
-        events: [...remote.events, ...fresh].sort((a, b) => a.ts - b.ts),
-        wordStats: { ...remote.wordStats, ...next.wordStats },
-      };
-      await saveCloud(merged);
-      setState(merged);
-      cacheLocal(merged);
-    } finally {
-      setSyncing(false);
-    }
   }, []);
 
-  const refresh = useCallback(async () => {
-    setSyncing(true);
-    try {
-      const remote = await loadCloud();
-      if (remote) {
-        setState(remote);
-        cacheLocal(remote);
-      }
-    } finally {
-      setSyncing(false);
-    }
+  const enqueue = useCallback((job: () => Promise<void>) => {
+    const run = writeTail.current.then(job, job);
+    writeTail.current = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return run;
   }, []);
+
+  const persistEvent = useCallback(
+    (event: GameEvent, apply: (current: SharedState) => SharedState) => {
+      adopt(apply(stateRef.current));
+      return enqueue(async () => {
+        setSyncing(true);
+        try {
+          for (let attempt = 0; attempt < 6; attempt += 1) {
+            const remote = await loadCloud();
+            if (!remote) {
+              await saveCloud(stateRef.current);
+              continue;
+            }
+            const incoming = stateRef.current.events.filter(
+              (item) => item.id === event.id || !remote.events.some((row) => row.id === item.id),
+            );
+            if (!incoming.some((item) => item.id === event.id)) incoming.push(event);
+            const merged = mergeIncoming(remote, incoming, stateRef.current);
+            await saveCloud(merged);
+            const check = await loadCloud();
+            if (check?.events.some((item) => item.id === event.id)) {
+              adopt(check);
+              return;
+            }
+            adopt(merged);
+          }
+        } finally {
+          setSyncing(false);
+        }
+      });
+    },
+    [adopt, enqueue],
+  );
+
+  const refresh = useCallback(() => {
+    return enqueue(async () => {
+      setSyncing(true);
+      try {
+        const remote = await loadCloud();
+        if (remote) adopt(remote);
+      } finally {
+        setSyncing(false);
+      }
+    });
+  }, [adopt, enqueue]);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         const remote = await loadCloud();
-        const phone = localMoney();
-        if (!remote) {
-          const start = Math.max(START_BALANCE, phone);
+        if (cancelled) return;
+        if (remote) {
+          adopt(remote);
+        } else {
           const seed: GameEvent = {
             id: newId(),
             ts: Date.now(),
             kind: "seed",
-            moneyDelta: start,
+            moneyDelta: START_BALANCE,
             hintDelta: 0,
-            reason: "Стартовый баланс с телефона",
+            reason: "Стартовый баланс",
             device: deviceId(),
           };
           const initial = {
             ...emptyState(),
-            money: start,
-            hints: Number(localStorage.getItem("dictation_hints") ?? START_HINTS) || START_HINTS,
+            money: START_BALANCE,
+            hints: START_HINTS,
             events: [seed],
           };
-          if (!cancelled) {
-            setState(initial);
-            cacheLocal(initial);
-          }
+          adopt(initial);
           await saveCloud(initial);
-        } else {
-          const needsLift = phone > remote.money && remote.events.every((event) => event.kind !== "pay" && event.kind !== "rst");
-          if (needsLift) {
-            const lift: GameEvent = {
-              id: newId(),
-              ts: Date.now(),
-              kind: "seed",
-              moneyDelta: phone - remote.money,
-              reason: "Подтянули баланс с телефона сына",
-              device: deviceId(),
-            };
-            const lifted = {
-              ...remote,
-              money: phone,
-              events: [...remote.events, lift],
-            };
-            if (!cancelled) {
-              setState(lifted);
-              cacheLocal(lifted);
-            }
-            await saveCloud(lifted);
-          } else if (!cancelled) {
-            setState(remote);
-            cacheLocal(remote);
-          }
         }
       } catch {
         const cached = readLocalCache();
-        if (cached && !cancelled) setState(cached);
+        if (cached && !cancelled) adopt(cached);
       } finally {
         if (!cancelled) setReady(true);
       }
@@ -157,15 +147,32 @@ export function GameStoreProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [adopt]);
+
+  useEffect(() => {
+    const pull = () => {
+      if (document.visibilityState === "hidden") return;
+      void refresh();
+    };
+    const onShow = () => pull();
+    document.addEventListener("visibilitychange", pull);
+    window.addEventListener("pageshow", onShow);
+    window.addEventListener("focus", onShow);
+    return () => {
+      document.removeEventListener("visibilitychange", pull);
+      window.removeEventListener("pageshow", onShow);
+      window.removeEventListener("focus", onShow);
+    };
+  }, [refresh]);
 
   const applyAnswer = useCallback(
     async (input: AnswerInput) => {
+      const current = stateRef.current;
       const reward = input.ok
         ? input.streakAfter >= 2
-          ? state.settings.rewardStreak
-          : state.settings.rewardCorrect
-        : -state.settings.penaltyWrong;
+          ? current.settings.rewardStreak
+          : current.settings.rewardCorrect
+        : -current.settings.penaltyWrong;
       const event: GameEvent = {
         id: newId(),
         ts: Date.now(),
@@ -179,29 +186,28 @@ export function GameStoreProvider({ children }: { children: ReactNode }) {
         moneyDelta: reward,
         device: deviceId(),
       };
-      const next: SharedState = {
-        ...state,
-        money: Math.max(0, state.money + reward),
-        events: [...state.events, event],
+      await persistEvent(event, (now) => ({
+        ...now,
+        money: Math.max(0, now.money + reward),
+        events: [...now.events, event],
         wordStats: {
-          ...state.wordStats,
+          ...now.wordStats,
           [input.word]: {
             word: input.word,
-            seen: (state.wordStats[input.word]?.seen ?? 0) + 1,
-            ok: (state.wordStats[input.word]?.ok ?? 0) + (input.ok ? 1 : 0),
-            bad: (state.wordStats[input.word]?.bad ?? 0) + (input.ok ? 0 : 1),
+            seen: (now.wordStats[input.word]?.seen ?? 0) + 1,
+            ok: (now.wordStats[input.word]?.ok ?? 0) + (input.ok ? 1 : 0),
+            bad: (now.wordStats[input.word]?.bad ?? 0) + (input.ok ? 0 : 1),
             lastTs: event.ts,
             lastShown: input.shown,
           },
         },
-      };
-      await persist(next);
+      }));
     },
-    [persist, state],
+    [persistEvent],
   );
 
   const applyHint = useCallback(async () => {
-    if (state.hints <= 0) return;
+    if (stateRef.current.hints <= 0) return;
     const event: GameEvent = {
       id: newId(),
       ts: Date.now(),
@@ -211,18 +217,19 @@ export function GameStoreProvider({ children }: { children: ReactNode }) {
       reason: "Подсказка в игре",
       device: deviceId(),
     };
-    await persist({
-      ...state,
-      hints: state.hints - 1,
-      events: [...state.events, event],
-    });
-  }, [persist, state]);
+    await persistEvent(event, (now) => ({
+      ...now,
+      hints: Math.max(0, now.hints - 1),
+      events: [...now.events, event],
+    }));
+  }, [persistEvent]);
 
   const applyShop = useCallback(
     async (pack: boolean) => {
-      const price = pack ? state.settings.hintPackPrice : state.settings.hintPrice;
+      const current = stateRef.current;
+      const price = pack ? current.settings.hintPackPrice : current.settings.hintPrice;
       const add = pack ? 3 : 1;
-      if (state.money < price) return;
+      if (current.money < price) return;
       const event: GameEvent = {
         id: newId(),
         ts: Date.now(),
@@ -232,19 +239,19 @@ export function GameStoreProvider({ children }: { children: ReactNode }) {
         reason: pack ? "Набор подсказок" : "Подсказка",
         device: deviceId(),
       };
-      await persist({
-        ...state,
-        money: state.money - price,
-        hints: state.hints + add,
-        events: [...state.events, event],
-      });
+      await persistEvent(event, (now) => ({
+        ...now,
+        money: Math.max(0, now.money - price),
+        hints: now.hints + add,
+        events: [...now.events, event],
+      }));
     },
-    [persist, state],
+    [persistEvent],
   );
 
   const payout = useCallback(
     async (amount: number, reason: string) => {
-      const cut = Math.min(state.money, Math.max(0, Math.round(amount)));
+      const cut = Math.min(stateRef.current.money, Math.max(0, Math.round(amount)));
       const event: GameEvent = {
         id: newId(),
         ts: Date.now(),
@@ -253,54 +260,56 @@ export function GameStoreProvider({ children }: { children: ReactNode }) {
         reason: reason || "Снятие денег для сына",
         device: deviceId(),
       };
-      await persist({
-        ...state,
-        money: state.money - cut,
-        events: [...state.events, event],
-      });
+      await persistEvent(event, (now) => ({
+        ...now,
+        money: Math.max(0, now.money - cut),
+        events: [...now.events, event],
+      }));
     },
-    [persist, state],
+    [persistEvent],
   );
 
   const resetProgress = useCallback(
     async (reason: string) => {
+      const current = stateRef.current;
       const event: GameEvent = {
         id: newId(),
         ts: Date.now(),
         kind: "rst",
-        moneyDelta: -state.money,
-        hintDelta: START_HINTS - state.hints,
+        moneyDelta: -current.money,
+        hintDelta: START_HINTS - current.hints,
         reason: reason || "Сброс прогресса",
         device: deviceId(),
       };
-      await persist({
-        ...state,
+      await persistEvent(event, () => ({
+        ...current,
         money: 0,
         hints: START_HINTS,
-        events: [...state.events, event],
-      });
+        events: [...current.events, event],
+      }));
     },
-    [persist, state],
+    [persistEvent],
   );
 
   const saveSettings = useCallback(
     async (settings: Settings) => {
+      const current = stateRef.current;
       const event: GameEvent = {
         id: newId(),
         ts: Date.now(),
         kind: "set",
         moneyDelta: 0,
         detail: `${settings.rewardCorrect},${settings.rewardStreak},${settings.penaltyWrong},${settings.hintPrice},${settings.hintPackPrice},${hexEncode(settings.parentPassword)}`,
-        reason: settings.parentPassword !== state.settings.parentPassword ? "Сменили пароль" : "Изменили премии",
+        reason: settings.parentPassword !== current.settings.parentPassword ? "Сменили пароль" : "Изменили премии",
         device: deviceId(),
       };
-      await persist({
-        ...state,
+      await persistEvent(event, (now) => ({
+        ...now,
         settings,
-        events: [...state.events, event],
-      });
+        events: [...now.events, event],
+      }));
     },
-    [persist, state],
+    [persistEvent],
   );
 
   const value = useMemo<GameStoreValue>(

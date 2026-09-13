@@ -42,10 +42,14 @@ function unwrap(raw: string): string {
 }
 
 async function cloudGet(key: string): Promise<string> {
-  const response = await fetch(`${BASE}/GetValue/${CLOUD_APP_KEY}/${key}`, {
+  const stamp = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const response = await fetch(`${BASE}/GetValue/${CLOUD_APP_KEY}/${key}?t=${stamp}`, {
     cache: "no-store",
+    headers: { "Cache-Control": "no-cache", Pragma: "no-cache" },
   });
-  if (!response.ok) return "";
+  if (!response.ok) {
+    throw new Error("Не удалось прочитать общую базу");
+  }
   return unwrap(await response.text());
 }
 
@@ -53,8 +57,12 @@ async function cloudSet(key: string, value: string): Promise<void> {
   if (value.length > 1000) {
     value = value.slice(0, 1000);
   }
-  const url = `${BASE}/UpdateValue/${CLOUD_APP_KEY}/${key}/${encodeURIComponent(value)}`;
-  const response = await fetch(url, { method: "POST" });
+  const url = `${BASE}/UpdateValue/${CLOUD_APP_KEY}/${key}/${encodeURIComponent(value)}?t=${Date.now()}`;
+  const response = await fetch(url, {
+    method: "POST",
+    cache: "no-store",
+    headers: { "Cache-Control": "no-cache", Pragma: "no-cache" },
+  });
   if (!response.ok) {
     throw new Error("Не удалось сохранить в общую базу");
   }
@@ -226,17 +234,55 @@ export function replay(events: GameEvent[], settings = DEFAULT_SETTINGS): Shared
   return { money, hints, settings: currentSettings, events: sorted, wordStats };
 }
 
+export function mergeStats(remote: Record<string, WordStat>, local: Record<string, WordStat>): Record<string, WordStat> {
+  const merged: Record<string, WordStat> = { ...remote };
+  for (const [word, row] of Object.entries(local)) {
+    const prev = merged[word];
+    if (!prev) {
+      merged[word] = row;
+      continue;
+    }
+    const localNewer = (row.lastTs ?? 0) >= (prev.lastTs ?? 0);
+    merged[word] = {
+      word,
+      seen: Math.max(prev.seen, row.seen),
+      ok: Math.max(prev.ok, row.ok),
+      bad: Math.max(prev.bad, row.bad),
+      lastTs: Math.max(prev.lastTs ?? 0, row.lastTs ?? 0),
+      lastShown: localNewer ? row.lastShown : prev.lastShown,
+    };
+  }
+  return merged;
+}
+
+export function mergeIncoming(remote: SharedState, incoming: GameEvent[], local: SharedState): SharedState {
+  const known = new Set(remote.events.map((event) => event.id));
+  const fresh = incoming.filter((event) => !known.has(event.id));
+  const lastSet = [...fresh].reverse().find((event) => event.kind === "set");
+  return {
+    money: Math.max(0, remote.money + fresh.reduce((sum, event) => sum + event.moneyDelta, 0)),
+    hints: Math.max(0, remote.hints + fresh.reduce((sum, event) => sum + (event.hintDelta ?? 0), 0)),
+    settings: lastSet ? local.settings : remote.settings,
+    events: [...remote.events, ...fresh].sort((a, b) => a.ts - b.ts || a.id.localeCompare(b.id)),
+    wordStats: mergeStats(remote.wordStats, local.wordStats),
+  };
+}
+
 export async function loadCloud(): Promise<SharedState | null> {
   const [metaRaw, statsRaw, ...logsRaw] = await Promise.all([
     cloudGet(META_KEY),
     cloudGet(STATS_KEY),
     ...LOG_KEYS.map((key) => cloudGet(key)),
   ]);
-  const meta = decodeMeta(metaRaw);
-  if (!meta) return null;
   const events = logsRaw.flatMap(decodeLog);
   const unique = new Map(events.map((event) => [event.id, event]));
-  const state = replay([...unique.values()], meta.settings);
+  const uniqueEvents = [...unique.values()];
+  const meta = decodeMeta(metaRaw);
+  if (!meta) {
+    if (uniqueEvents.length === 0 && !statsRaw) return null;
+    return replay(uniqueEvents);
+  }
+  const state = replay(uniqueEvents, meta.settings);
   if (Object.keys(state.wordStats).length === 0) {
     state.wordStats = decodeStats(statsRaw);
   }
@@ -258,12 +304,7 @@ export async function saveCloud(state: SharedState): Promise<void> {
 }
 
 export function mergeStates(remote: SharedState, incoming: GameEvent[]): SharedState {
-  const map = new Map<string, GameEvent>();
-  for (const event of remote.events) map.set(event.id, event);
-  for (const event of incoming) map.set(event.id, event);
-  const merged = replay([...map.values()], remote.settings);
-  merged.settings = remote.settings;
-  return merged;
+  return mergeIncoming(remote, incoming, remote);
 }
 
 export function newId(): string {
