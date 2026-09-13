@@ -7,6 +7,7 @@ import {
   loadCloud,
   mergeIncoming,
   newId,
+  peekCloudMeta,
   readLocalCache,
   saveCloud,
 } from "./cloud";
@@ -48,6 +49,8 @@ export function GameStoreProvider({ children }: { children: ReactNode }) {
   const [syncing, setSyncing] = useState(false);
   const stateRef = useRef(state);
   const writeTail = useRef(Promise.resolve());
+  const pendingWrites = useRef(0);
+  const sleptRef = useRef(document.visibilityState === "hidden");
   stateRef.current = state;
 
   const adopt = useCallback((next: SharedState) => {
@@ -68,6 +71,7 @@ export function GameStoreProvider({ children }: { children: ReactNode }) {
   const persistEvent = useCallback(
     (event: GameEvent, apply: (current: SharedState) => SharedState) => {
       adopt(apply(stateRef.current));
+      pendingWrites.current += 1;
       return enqueue(async () => {
         setSyncing(true);
         try {
@@ -91,6 +95,7 @@ export function GameStoreProvider({ children }: { children: ReactNode }) {
             adopt(merged);
           }
         } finally {
+          pendingWrites.current = Math.max(0, pendingWrites.current - 1);
           setSyncing(false);
         }
       });
@@ -98,14 +103,16 @@ export function GameStoreProvider({ children }: { children: ReactNode }) {
     [adopt, enqueue],
   );
 
-  const refresh = useCallback(() => {
+  const refresh = useCallback((silent = true) => {
     return enqueue(async () => {
-      setSyncing(true);
+      if (pendingWrites.current > 0) return;
+      if (!silent) setSyncing(true);
       try {
         const remote = await loadCloud();
+        if (pendingWrites.current > 0) return;
         if (remote) adopt(remote);
       } finally {
-        setSyncing(false);
+        if (!silent) setSyncing(false);
       }
     });
   }, [adopt, enqueue]);
@@ -150,18 +157,63 @@ export function GameStoreProvider({ children }: { children: ReactNode }) {
   }, [adopt]);
 
   useEffect(() => {
-    const pull = () => {
+    let wakeTimerA = 0;
+    let wakeTimerB = 0;
+
+    const wake = () => {
+      sleptRef.current = false;
       if (document.visibilityState === "hidden") return;
-      void refresh();
+      void refresh(true);
+      window.clearTimeout(wakeTimerA);
+      window.clearTimeout(wakeTimerB);
+      wakeTimerA = window.setTimeout(() => void refresh(true), 800);
+      wakeTimerB = window.setTimeout(() => void refresh(true), 2200);
     };
-    const onShow = () => pull();
-    document.addEventListener("visibilitychange", pull);
-    window.addEventListener("pageshow", onShow);
-    window.addEventListener("focus", onShow);
+
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") {
+        sleptRef.current = true;
+        return;
+      }
+      wake();
+    };
+
+    const onPointer = () => {
+      if (!sleptRef.current) return;
+      wake();
+    };
+
+    const tick = async () => {
+      if (document.visibilityState === "hidden" || pendingWrites.current > 0) return;
+      try {
+        const peek = await peekCloudMeta();
+        if (!peek || pendingWrites.current > 0) return;
+        const now = stateRef.current;
+        if (peek.money === now.money && peek.hints === now.hints) return;
+        await refresh(true);
+      } catch {
+        /* сеть могла уснуть вместе с телефоном */
+      }
+    };
+
+    const poll = window.setInterval(() => {
+      void tick();
+    }, 3000);
+
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("pageshow", wake);
+    window.addEventListener("focus", wake);
+    window.addEventListener("online", wake);
+    document.addEventListener("pointerdown", onPointer, { passive: true });
     return () => {
-      document.removeEventListener("visibilitychange", pull);
-      window.removeEventListener("pageshow", onShow);
-      window.removeEventListener("focus", onShow);
+      window.clearInterval(poll);
+      window.clearTimeout(wakeTimerA);
+      window.clearTimeout(wakeTimerB);
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("pageshow", wake);
+      window.removeEventListener("focus", wake);
+      window.removeEventListener("online", wake);
+      document.removeEventListener("pointerdown", onPointer);
     };
   }, [refresh]);
 

@@ -83,14 +83,19 @@ function encodeMeta(state: SharedState): string {
   ].join(";");
 }
 
-function decodeMeta(raw: string): Pick<SharedState, "money" | "hints" | "settings"> | null {
+function parseMetaMap(raw: string): Record<string, string> | null {
   if (!raw || !raw.includes("m=")) return null;
-  const map = Object.fromEntries(
+  return Object.fromEntries(
     raw.split(";").map((part) => {
       const idx = part.indexOf("=");
       return idx === -1 ? [part, ""] : [part.slice(0, idx), part.slice(idx + 1)];
     }),
   );
+}
+
+function decodeMeta(raw: string): Pick<SharedState, "money" | "hints" | "settings"> | null {
+  const map = parseMetaMap(raw);
+  if (!map) return null;
   return {
     money: Number(map.m ?? 0),
     hints: Number(map.h ?? START_HINTS),
@@ -265,6 +270,17 @@ export function mergeIncoming(remote: SharedState, incoming: GameEvent[], local:
     settings: lastSet ? local.settings : remote.settings,
     events: [...remote.events, ...fresh].sort((a, b) => a.ts - b.ts || a.id.localeCompare(b.id)),
     wordStats: mergeStats(remote.wordStats, local.wordStats),
+  };
+}
+
+export async function peekCloudMeta(): Promise<{ money: number; hints: number; updatedAt: number } | null> {
+  const raw = await cloudGet(META_KEY);
+  const map = parseMetaMap(raw);
+  if (!map) return null;
+  return {
+    money: Number(map.m ?? 0),
+    hints: Number(map.h ?? START_HINTS),
+    updatedAt: Number(map.u ?? 0),
   };
 }
 
