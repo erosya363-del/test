@@ -743,247 +743,32 @@ select {
   transform: scale(0.95);
 }
 
-.cabinet {
-  min-height: 100%;
-  overflow-y: auto;
-  padding: 1rem 1rem calc(1.5rem + env(safe-area-inset-bottom, 0px));
-  padding-top: calc(1rem + env(safe-area-inset-top, 0px));
-  background:
-    radial-gradient(circle at top, #3b3358 0%, transparent 45%),
-    linear-gradient(180deg, #141022 0%, #1c1730 100%);
-  color: #f4efe4;
-}
-
-.cabinet-sheet,
-.cabinet-card {
-  background: #f6edd8;
-  color: #2b2118;
-  border-radius: 22px;
-  padding: 1.2rem;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.28);
-}
-
-.cabinet-login {
-  max-width: 22rem;
-  margin: 12vh auto 0;
-}
-
-.cabinet-kicker {
-  margin: 0 0 0.3rem;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  font-size: 0.72rem;
-  font-weight: 800;
-  color: #0f766e;
-}
-
-.cabinet h1 {
-  margin: 0;
-  font-size: 1.8rem;
-  color: #163a4a;
-}
-
-.cabinet-lead,
-.cabinet-empty {
-  color: #6b5848;
-  font-size: 0.95rem;
-}
-
-.cabinet-form,
-.cabinet-fields,
-.cabinet-stack {
-  display: flex;
-  flex-direction: column;
-  gap: 0.8rem;
-}
-
-.cabinet input {
+.game-input {
   width: 100%;
-  border: 1px solid #d7c7a8;
-  border-radius: 12px;
-  padding: 0.8rem 0.9rem;
-  font-size: 16px;
-  background: #fffdf6;
-}
-
-.cabinet label {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  font-weight: 700;
-  font-size: 0.9rem;
-}
-
-.cabinet-btn {
-  border: 0;
-  border-radius: 14px;
-  padding: 0.9rem 1rem;
-  background: #0f766e;
-  color: #fff;
-  font-weight: 800;
-  font-size: 1rem;
-}
-
-.cabinet-btn.danger {
-  background: #b45309;
-}
-
-.cabinet-link {
-  border: 0;
-  background: none;
-  color: #c4b8ff;
-  font-weight: 700;
-  padding: 0.6rem 0;
-}
-
-.cabinet-login .cabinet-link {
-  color: #0f766e;
-}
-
-.cabinet-error {
-  color: #b91c1c;
-  font-weight: 700;
-}
-
-.cabinet-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: end;
-  gap: 1rem;
-  margin-bottom: 1rem;
-}
-
-.cabinet-top h1,
-.cabinet-top .cabinet-kicker {
-  color: #f6edd8;
-}
-
-.cabinet-balance {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 0.5rem;
-  margin-bottom: 0.8rem;
-}
-
-.cabinet-balance div {
-  background: rgba(246, 237, 216, 0.12);
-  border: 1px solid rgba(246, 237, 216, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 16px;
-  padding: 0.7rem;
-}
-
-.cabinet-balance span {
-  display: block;
-  font-size: 0.7rem;
-  color: #c8bfdb;
-}
-
-.cabinet-balance strong {
-  font-size: 1.15rem;
-}
-
-.cabinet-sync {
-  grid-column: 1 / -1;
-  margin: 0;
-  color: #b7aed0;
-  font-size: 0.85rem;
-}
-
-.cabinet-tabs {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 0.4rem;
-  margin-bottom: 0.8rem;
-}
-
-.cabinet-tabs button {
-  border: 0;
-  border-radius: 999px;
-  padding: 0.55rem 0.2rem;
+  padding: 0.95rem 1rem;
+  font-size: 16px;
+  font-weight: 700;
+  color: #fff;
   background: rgba(255, 255, 255, 0.08);
-  color: #efe8ff;
-  font-weight: 700;
 }
 
-.cabinet-tabs button.on {
-  background: #f6edd8;
-  color: #163a4a;
+.game-input::placeholder {
+  color: rgba(255, 255, 255, 0.4);
 }
 
-.cabinet-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.6rem;
-  padding: 0;
-  margin: 0;
-  list-style: none;
+.papa-stage {
+  flex: none;
+  min-height: min-content;
+  justify-content: flex-start;
+  padding-bottom: 1rem;
 }
 
-.cabinet-grid li {
-  background: #fff8ea;
-  border-radius: 14px;
-  padding: 0.7rem;
-}
-
-.cabinet-grid b {
+.field-label {
   display: block;
-  font-size: 1.2rem;
-}
-
-.cabinet-words,
-.cabinet-log {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.55rem;
-}
-
-.cabinet-words li,
-.cabinet-log li {
-  background: #fff8ea;
-  border-radius: 14px;
-  padding: 0.7rem 0.8rem;
-}
-
-.cabinet-words li {
-  display: flex;
-  justify-content: space-between;
-  gap: 0.8rem;
-}
-
-.cabinet-words span,
-.cabinet-log p {
-  display: block;
-  margin: 0.15rem 0 0;
-  color: #6b5848;
-  font-size: 0.88rem;
-}
-
-.cabinet-log-top {
-  display: flex;
-  justify-content: space-between;
-  gap: 0.6rem;
-}
-
-.cabinet-log .plus {
-  color: #0f766e;
-  font-weight: 800;
-}
-
-.cabinet-log .minus {
-  color: #b45309;
-  font-weight: 800;
-}
-
-.cabinet-note {
-  color: #bbf7d0;
+  margin-bottom: 0.35rem;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 0.85rem;
   font-weight: 700;
-}
-
-.cabinet-card h2 {
-  margin: 0 0 0.4rem;
-  font-size: 1.15rem;
-  color: #163a4a;
 }

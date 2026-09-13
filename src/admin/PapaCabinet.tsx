@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useGameStore } from "../data/GameStore";
-import { DEFAULT_SETTINGS, PARENT_PASSWORD, type Settings } from "../data/types";
+import { DEFAULT_SETTINGS, type Settings } from "../data/types";
 
 function formatTime(ts?: number) {
   if (!ts) return "—";
@@ -15,21 +15,21 @@ function formatTime(ts?: number) {
 function kindLabel(kind: string) {
   switch (kind) {
     case "ok":
-      return "Верно";
+      return "✅ Верно";
     case "bad":
-      return "Ошибка";
+      return "❌ Ошибка";
     case "hint":
-      return "Подсказка";
+      return "💡 Подсказка";
     case "shop":
-      return "Магазин";
+      return "🛒 Магазин";
     case "pay":
-      return "Снятие";
+      return "💸 Снятие";
     case "rst":
-      return "Сброс";
+      return "🔄 Сброс";
     case "seed":
-      return "Старт";
+      return "🌱 Старт";
     case "set":
-      return "Премии";
+      return "⚙️ Настройка";
     default:
       return kind;
   }
@@ -44,6 +44,8 @@ export function PapaCabinet({ onClose }: { onClose: () => void }) {
   const [payout, setPayout] = useState("100");
   const [reason, setReason] = useState("Снятие денег для сына");
   const [settings, setSettings] = useState<Settings>(store.settings);
+  const [newPass, setNewPass] = useState("");
+  const [newPass2, setNewPass2] = useState("");
   const [savedNote, setSavedNote] = useState("");
 
   useEffect(() => {
@@ -57,7 +59,6 @@ export function PapaCabinet({ onClose }: { onClose: () => void }) {
       void store.refresh();
     }, 8000);
     return () => window.clearInterval(timer);
-    // refresh is stable enough for a parent monitor
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authed]);
 
@@ -78,7 +79,7 @@ export function PapaCabinet({ onClose }: { onClose: () => void }) {
 
   const login = (event: FormEvent) => {
     event.preventDefault();
-    if (password.trim() === PARENT_PASSWORD) {
+    if (password.trim() === store.settings.parentPassword) {
       sessionStorage.setItem("dictation_papa", "1");
       setAuthed(true);
       setError("");
@@ -89,13 +90,18 @@ export function PapaCabinet({ onClose }: { onClose: () => void }) {
 
   if (!authed) {
     return (
-      <div className="cabinet">
-        <div className="cabinet-sheet cabinet-login">
-          <p className="cabinet-kicker">Только для родителей</p>
-          <h1>Кабинет папы</h1>
-          <p className="cabinet-lead">Сюда сын не заходит. Пароль тот, что договорились.</p>
-          <form onSubmit={login} className="cabinet-form">
+      <div className="app-screen">
+        <div className="play-stage">
+          <div className="text-center">
+            <div className="play-emoji">🔐</div>
+            <h1 className="text-3xl font-black bg-gradient-to-r from-yellow-200 via-pink-200 to-purple-200 bg-clip-text text-transparent">
+              Кабинет папы
+            </h1>
+            <p className="text-purple-200/80 mt-2">Сын сюда не зайдёт без пароля</p>
+          </div>
+          <form onSubmit={login} className="glass-card w-full space-y-3">
             <input
+              className="game-input"
               type="password"
               inputMode="numeric"
               autoComplete="off"
@@ -103,13 +109,13 @@ export function PapaCabinet({ onClose }: { onClose: () => void }) {
               value={password}
               onChange={(event) => setPassword(event.target.value)}
             />
-            {error && <p className="cabinet-error">{error}</p>}
-            <button type="submit" className="cabinet-btn">
+            {error && <p className="text-red-300 font-bold text-center">{error}</p>}
+            <button type="submit" className="w-full btn-primary play-cta">
               Войти
             </button>
           </form>
-          <button type="button" className="cabinet-link" onClick={onClose}>
-            Вернуться в игру
+          <button type="button" className="play-cta btn-secondary" onClick={onClose}>
+            ← Назад
           </button>
         </div>
       </div>
@@ -117,268 +123,243 @@ export function PapaCabinet({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div className="cabinet">
-      <header className="cabinet-top">
-        <div>
-          <p className="cabinet-kicker">Журнал семьи</p>
-          <h1>Кабинет папы</h1>
+    <div className="app-screen">
+      <div className="play-stage papa-stage">
+        <div className="text-center">
+          <div className="play-badge bg-yellow-500/15 border-yellow-400/30 text-yellow-100">🔐 Кабинет папы</div>
+          <p className="text-white/60 text-sm mt-2">{store.syncing ? "Сохраняем…" : "Общая база с любого телефона"}</p>
         </div>
-        <button type="button" className="cabinet-link" onClick={onClose}>
-          В игру
-        </button>
-      </header>
 
-      <section className="cabinet-balance">
-        <div>
-          <span>Сейчас у сына</span>
-          <strong>{store.money} ₽</strong>
-        </div>
-        <div>
-          <span>Заработал в игре</span>
-          <strong>{report.earned} ₽</strong>
-        </div>
-        <div>
-          <span>Сняли / сбросили</span>
-          <strong>{Math.abs(report.withdrawn)} ₽</strong>
-        </div>
-        <p className="cabinet-sync">{store.syncing ? "Сохраняем…" : "Общая база, видно с любого телефона"}</p>
-      </section>
-
-      <nav className="cabinet-tabs">
-        <button type="button" className={tab === "stat" ? "on" : ""} onClick={() => setTab("stat")}>
-          Анализ
-        </button>
-        <button type="button" className={tab === "log" ? "on" : ""} onClick={() => setTab("log")}>
-          Ответы
-        </button>
-        <button type="button" className={tab === "pay" ? "on" : ""} onClick={() => setTab("pay")}>
-          Деньги
-        </button>
-        <button type="button" className={tab === "set" ? "on" : ""} onClick={() => setTab("set")}>
-          Премии
-        </button>
-      </nav>
-
-      {tab === "stat" && (
-        <div className="cabinet-stack">
-          <article className="cabinet-card">
-            <h2>Сводка</h2>
-            <ul className="cabinet-grid">
-              <li>
-                <b>{report.answers.filter((event) => event.kind === "ok").length}</b>
-                <span>верных</span>
-              </li>
-              <li>
-                <b>{report.answers.filter((event) => event.kind === "bad").length}</b>
-                <span>ошибок</span>
-              </li>
-              <li>
-                <b>{report.penalties} ₽</b>
-                <span>штрафы</span>
-              </li>
-              <li>
-                <b>{Math.abs(report.shop)} ₽</b>
-                <span>магазин</span>
-              </li>
-            </ul>
-          </article>
-
-          <article className="cabinet-card">
-            <h2>Слова, которые постоянно ломаются</h2>
-            {report.hard.length === 0 ? (
-              <p className="cabinet-empty">Пока нет устойчивых ошибок. Нужно хотя бы 2 попытки на слово.</p>
-            ) : (
-              <ul className="cabinet-words">
-                {report.hard.map((row) => (
-                  <li key={row.word}>
-                    <div>
-                      <b>{row.word}</b>
-                      <span>последний показ: {row.lastShown || "—"}</span>
-                    </div>
-                    <em>
-                      {row.bad}/{row.seen} ошибок
-                    </em>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </article>
-
-          <article className="cabinet-card">
-            <h2>Все слова</h2>
-            {report.worst.length === 0 ? (
-              <p className="cabinet-empty">Ещё не играли после включения общей базы.</p>
-            ) : (
-              <ul className="cabinet-words">
-                {report.worst.map((row) => (
-                  <li key={row.word}>
-                    <div>
-                      <b>{row.word}</b>
-                      <span>
-                        верно {row.ok} · ошибка {row.bad}
-                      </span>
-                    </div>
-                    <em>{row.seen} раз</em>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </article>
-        </div>
-      )}
-
-      {tab === "log" && (
-        <article className="cabinet-card">
-          <h2>Журнал ответов</h2>
-          <p className="cabinet-lead">Можно проверить, что именно видел сын и что ответил.</p>
-          {store.events.length === 0 ? (
-            <p className="cabinet-empty">Журнал пуст.</p>
-          ) : (
-            <ul className="cabinet-log">
-              {[...store.events].reverse().map((event) => (
-                <li key={event.id} className={event.kind}>
-                  <div className="cabinet-log-top">
-                    <b>{kindLabel(event.kind)}</b>
-                    <span>{formatTime(event.ts)}</span>
-                  </div>
-                  {event.word && (
-                    <p>
-                      Слово: <b>{event.word}</b>
-                    </p>
-                  )}
-                  {event.shown && (
-                    <p>
-                      Показали: <b>{event.shown}</b>
-                    </p>
-                  )}
-                  {event.expected && (
-                    <p>
-                      Правильно: <b>{event.expected}</b>
-                    </p>
-                  )}
-                  {event.choice && (
-                    <p>
-                      Ответ сына: <b>{event.choice}</b>
-                    </p>
-                  )}
-                  {event.errorType && <p>Тип ошибки в задании: {event.errorType}</p>}
-                  {event.reason && <p>{event.reason}</p>}
-                  <p className={event.moneyDelta >= 0 ? "plus" : "minus"}>
-                    {event.moneyDelta > 0 ? "+" : ""}
-                    {event.moneyDelta} ₽
-                  </p>
-                </li>
-              ))}
-            </ul>
-          )}
-        </article>
-      )}
-
-      {tab === "pay" && (
-        <div className="cabinet-stack">
-          <article className="cabinet-card">
-            <h2>Снятие денег для сына</h2>
-            <p className="cabinet-lead">Списывается с общего баланса. На всех телефонах сумма станет меньше.</p>
-            <label>
-              Сумма
-              <input type="number" min={0} value={payout} onChange={(event) => setPayout(event.target.value)} />
-            </label>
-            <label>
-              За что
-              <input value={reason} onChange={(event) => setReason(event.target.value)} />
-            </label>
-            <button
-              type="button"
-              className="cabinet-btn"
-              onClick={async () => {
-                await store.payout(Number(payout) || 0, reason);
-                setSavedNote("Снятие записано в журнал");
-              }}
-            >
-              Снять с баланса
-            </button>
-          </article>
-
-          <article className="cabinet-card">
-            <h2>Сброс</h2>
-            <p className="cabinet-lead">Обнуляет карманные в игре и возвращает 3 подсказки. История ответов остаётся.</p>
-            <button
-              type="button"
-              className="cabinet-btn danger"
-              onClick={async () => {
-                await store.resetProgress("Сброс прогресса / снятие всех денег");
-                setSavedNote("Баланс обнулён");
-              }}
-            >
-              Сбросить деньги сына
-            </button>
-          </article>
-          {savedNote && <p className="cabinet-note">{savedNote}</p>}
-        </div>
-      )}
-
-      {tab === "set" && (
-        <article className="cabinet-card">
-          <h2>Премии</h2>
-          <p className="cabinet-lead">Минус за ошибку пишите плюсом: 3 значит −3 ₽.</p>
-          <div className="cabinet-fields">
-            <label>
-              За правильный ответ
-              <input
-                type="number"
-                value={settings.rewardCorrect}
-                onChange={(event) => setSettings({ ...settings, rewardCorrect: Number(event.target.value) })}
-              />
-            </label>
-            <label>
-              За серию
-              <input
-                type="number"
-                value={settings.rewardStreak}
-                onChange={(event) => setSettings({ ...settings, rewardStreak: Number(event.target.value) })}
-              />
-            </label>
-            <label>
-              Штраф за ошибку
-              <input
-                type="number"
-                value={settings.penaltyWrong}
-                onChange={(event) => setSettings({ ...settings, penaltyWrong: Number(event.target.value) })}
-              />
-            </label>
-            <label>
-              Цена подсказки
-              <input
-                type="number"
-                value={settings.hintPrice}
-                onChange={(event) => setSettings({ ...settings, hintPrice: Number(event.target.value) })}
-              />
-            </label>
-            <label>
-              Набор +3
-              <input
-                type="number"
-                value={settings.hintPackPrice}
-                onChange={(event) => setSettings({ ...settings, hintPackPrice: Number(event.target.value) })}
-              />
-            </label>
+        <div className="grid grid-cols-3 gap-2 w-full">
+          <div className="glass-card !p-3 text-center">
+            <p className="text-white/50 text-xs">Сейчас</p>
+            <p className="font-black text-yellow-300 text-lg">{store.money} ₽</p>
           </div>
-          <button
-            type="button"
-            className="cabinet-btn"
-            onClick={async () => {
-              await store.saveSettings(settings);
-              setSavedNote("Премии обновлены на всех телефонах");
-            }}
-          >
-            Сохранить премии
+          <div className="glass-card !p-3 text-center">
+            <p className="text-white/50 text-xs">Заработал</p>
+            <p className="font-black text-green-300 text-lg">{report.earned} ₽</p>
+          </div>
+          <div className="glass-card !p-3 text-center">
+            <p className="text-white/50 text-xs">Сняли</p>
+            <p className="font-black text-orange-300 text-lg">{Math.abs(report.withdrawn)} ₽</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 w-full">
+          <button type="button" className={tab === "stat" ? "btn-primary py-2.5 text-sm" : "btn-secondary py-2.5 text-sm"} onClick={() => setTab("stat")}>
+            📊 Анализ
           </button>
-          <button type="button" className="cabinet-link" onClick={() => setSettings({ ...DEFAULT_SETTINGS })}>
-            Вернуть обычные 5 / 10 / −3
+          <button type="button" className={tab === "log" ? "btn-primary py-2.5 text-sm" : "btn-secondary py-2.5 text-sm"} onClick={() => setTab("log")}>
+            📝 Ответы
           </button>
-          {savedNote && <p className="cabinet-note">{savedNote}</p>}
-        </article>
-      )}
+          <button type="button" className={tab === "pay" ? "btn-primary py-2.5 text-sm" : "btn-secondary py-2.5 text-sm"} onClick={() => setTab("pay")}>
+            💸 Деньги
+          </button>
+          <button type="button" className={tab === "set" ? "btn-primary py-2.5 text-sm" : "btn-secondary py-2.5 text-sm"} onClick={() => setTab("set")}>
+            ⚙️ Ещё
+          </button>
+        </div>
+
+        {tab === "stat" && (
+          <div className="w-full space-y-3">
+            <div className="glass-card w-full space-y-2">
+              <p className="font-black text-lg">Сводка</p>
+              <RuleMini label="Верных" value={String(report.answers.filter((event) => event.kind === "ok").length)} />
+              <RuleMini label="Ошибок" value={String(report.answers.filter((event) => event.kind === "bad").length)} />
+              <RuleMini label="Штрафы" value={`${report.penalties} ₽`} />
+              <RuleMini label="Магазин" value={`${Math.abs(report.shop)} ₽`} />
+            </div>
+            <div className="glass-card w-full">
+              <p className="font-black text-lg mb-2">Слова с ошибками</p>
+              {report.hard.length === 0 ? (
+                <p className="text-white/50">Пока нет слов, которые ломаются снова и снова.</p>
+              ) : (
+                <div className="space-y-2">
+                  {report.hard.map((row) => (
+                    <div key={row.word} className="bg-white/5 rounded-2xl p-3 border border-white/10">
+                      <p className="font-black">{row.word}</p>
+                      <p className="text-red-300 text-sm">{row.bad}/{row.seen} ошибок · было: {row.lastShown || "—"}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="glass-card w-full">
+              <p className="font-black text-lg mb-2">Все слова</p>
+              {report.worst.length === 0 ? (
+                <p className="text-white/50">После обновления ещё не играли.</p>
+              ) : (
+                <div className="space-y-2">
+                  {report.worst.map((row) => (
+                    <div key={row.word} className="bg-white/5 rounded-2xl p-3 border border-white/10 flex justify-between gap-2">
+                      <div>
+                        <p className="font-black">{row.word}</p>
+                        <p className="text-white/50 text-sm">верно {row.ok} · ошибка {row.bad}</p>
+                      </div>
+                      <p className="text-purple-200 font-bold">{row.seen}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {tab === "log" && (
+          <div className="glass-card w-full">
+            <p className="font-black text-lg mb-2">Журнал ответов</p>
+            {store.events.length === 0 ? (
+              <p className="text-white/50">Журнал пуст.</p>
+            ) : (
+              <div className="space-y-2">
+                {[...store.events].reverse().map((event) => (
+                  <div key={event.id} className="bg-white/5 rounded-2xl p-3 border border-white/10">
+                    <div className="flex justify-between gap-2 mb-1">
+                      <p className="font-black">{kindLabel(event.kind)}</p>
+                      <p className="text-white/40 text-sm">{formatTime(event.ts)}</p>
+                    </div>
+                    {event.word && <p>Слово: <b>{event.word}</b></p>}
+                    {event.shown && <p>Показали: <b>{event.shown}</b></p>}
+                    {event.expected && <p>Правильно: <b>{event.expected}</b></p>}
+                    {event.choice && <p>Ответ: <b>{event.choice}</b></p>}
+                    {event.reason && <p className="text-white/60">{event.reason}</p>}
+                    <p className={event.moneyDelta >= 0 ? "text-green-300 font-black" : "text-orange-300 font-black"}>
+                      {event.moneyDelta > 0 ? "+" : ""}
+                      {event.moneyDelta} ₽
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {tab === "pay" && (
+          <div className="w-full space-y-3">
+            <div className="glass-card w-full space-y-3">
+              <p className="font-black text-lg">Снятие денег для сына</p>
+              <label>
+                <span className="field-label">Сколько снять, ₽</span>
+                <input className="game-input" type="number" min={0} inputMode="numeric" value={payout} onChange={(event) => setPayout(event.target.value)} />
+              </label>
+              <label>
+                <span className="field-label">За что</span>
+                <input className="game-input" value={reason} onChange={(event) => setReason(event.target.value)} />
+              </label>
+              <button
+                type="button"
+                className="w-full btn-primary play-cta"
+                onClick={async () => {
+                  await store.payout(Number(payout) || 0, reason);
+                  setSavedNote("Снятие записано");
+                }}
+              >
+                Снять с баланса
+              </button>
+            </div>
+            <div className="glass-card w-full space-y-3">
+              <p className="font-black text-lg">Сброс</p>
+              <p className="text-white/60">Обнуляет деньги и ставит 3 подсказки. Журнал остаётся.</p>
+              <button
+                type="button"
+                className="w-full btn-danger play-cta"
+                onClick={async () => {
+                  await store.resetProgress("Сброс прогресса / снятие всех денег");
+                  setSavedNote("Баланс обнулён");
+                }}
+              >
+                Сбросить деньги сына
+              </button>
+            </div>
+          </div>
+        )}
+
+        {tab === "set" && (
+          <div className="w-full space-y-3">
+            <div className="glass-card w-full space-y-3">
+              <p className="font-black text-lg">Премии</p>
+              <p className="text-white/60">Штраф пишите плюсом: 3 значит −3 ₽</p>
+              <label>
+                <span className="field-label">За верный ответ, ₽</span>
+                <input className="game-input" type="number" inputMode="numeric" value={settings.rewardCorrect} onChange={(event) => setSettings({ ...settings, rewardCorrect: Number(event.target.value) })} />
+              </label>
+              <label>
+                <span className="field-label">За серию 3+, ₽</span>
+                <input className="game-input" type="number" inputMode="numeric" value={settings.rewardStreak} onChange={(event) => setSettings({ ...settings, rewardStreak: Number(event.target.value) })} />
+              </label>
+              <label>
+                <span className="field-label">Штраф за ошибку, ₽</span>
+                <input className="game-input" type="number" inputMode="numeric" value={settings.penaltyWrong} onChange={(event) => setSettings({ ...settings, penaltyWrong: Number(event.target.value) })} />
+              </label>
+              <label>
+                <span className="field-label">Цена подсказки, ₽</span>
+                <input className="game-input" type="number" inputMode="numeric" value={settings.hintPrice} onChange={(event) => setSettings({ ...settings, hintPrice: Number(event.target.value) })} />
+              </label>
+              <label>
+                <span className="field-label">Набор +3, ₽</span>
+                <input className="game-input" type="number" inputMode="numeric" value={settings.hintPackPrice} onChange={(event) => setSettings({ ...settings, hintPackPrice: Number(event.target.value) })} />
+              </label>
+              <button
+                type="button"
+                className="w-full btn-primary play-cta"
+                onClick={async () => {
+                  await store.saveSettings(settings);
+                  setSavedNote("Премии обновлены");
+                }}
+              >
+                Сохранить премии
+              </button>
+              <button type="button" className="w-full btn-secondary py-3" onClick={() => setSettings({ ...DEFAULT_SETTINGS, parentPassword: settings.parentPassword })}>
+                Вернуть 5 / 10 / −3
+              </button>
+            </div>
+            <div className="glass-card w-full space-y-3">
+              <p className="font-black text-lg">Сменить пароль</p>
+              <p className="text-white/60">Пароль один на все телефоны. Сейчас сын без него сюда не зайдёт.</p>
+              <label>
+                <span className="field-label">Новый пароль</span>
+                <input className="game-input" type="password" inputMode="numeric" autoComplete="off" placeholder="Новый пароль" value={newPass} onChange={(event) => setNewPass(event.target.value)} />
+              </label>
+              <label>
+                <span className="field-label">Ещё раз</span>
+                <input className="game-input" type="password" inputMode="numeric" autoComplete="off" placeholder="Ещё раз" value={newPass2} onChange={(event) => setNewPass2(event.target.value)} />
+              </label>
+              <button
+                type="button"
+                className="w-full btn-primary play-cta"
+                onClick={async () => {
+                  if (!newPass.trim() || newPass !== newPass2) {
+                    setSavedNote("Пароли не совпали");
+                    return;
+                  }
+                  const next = { ...settings, parentPassword: newPass.trim() };
+                  setSettings(next);
+                  await store.saveSettings(next);
+                  setNewPass("");
+                  setNewPass2("");
+                  setSavedNote("Пароль изменён на всех телефонах");
+                }}
+              >
+                Сохранить пароль
+              </button>
+            </div>
+          </div>
+        )}
+
+        {savedNote && <p className="text-green-300 font-bold text-center">{savedNote}</p>}
+        <button type="button" className="play-cta btn-secondary" onClick={onClose}>
+          ← В игру
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function RuleMini({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex justify-between bg-white/5 rounded-2xl px-3 py-2 border border-white/10">
+      <span className="text-white/60">{label}</span>
+      <span className="font-black">{value}</span>
     </div>
   );
 }

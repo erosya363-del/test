@@ -14,6 +14,7 @@ export type Settings = {
   penaltyWrong: number;
   hintPrice: number;
   hintPackPrice: number;
+  parentPassword: string;
 };
 
 export type GameEvent = {
@@ -55,6 +56,7 @@ export const DEFAULT_SETTINGS: Settings = {
   penaltyWrong: 3,
   hintPrice: 15,
   hintPackPrice: 40,
+  parentPassword: "654321",
 };
 
 export const START_BALANCE = 2000;

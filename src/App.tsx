@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { playCorrectSound, playWrongSound, playCoinSound, playClickSound, playShowSound, resumeAudio } from './sounds';
 import { PapaCabinet } from './admin/PapaCabinet';
 import { useGameStore } from './data/GameStore';
+import { EXTRA_WORDS } from './data/vocabExtra';
 
 const a = '\u0301'; // combining acute accent
 
@@ -468,6 +469,7 @@ const WORDS: WordData[] = [
     { wrong: `учительница`, errorType: 'stress', stressHint: 'Ударение не там' },
     { wrong: `учи${a}тельница`, errorType: 'none' },
   ]},
+  ...EXTRA_WORDS,
 ];
 
 type GameState = 'splash' | 'menu' | 'shop' | 'showing' | 'guessing' | 'fixing' | 'result' | 'final';
@@ -505,7 +507,6 @@ function App() {
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
 
-  const titlePress = useRef<number | null>(null);
   const openCabinet = () => {
     window.location.hash = 'papa';
     setCabinetOpen(true);
@@ -951,19 +952,7 @@ function App() {
               <div className="text-7xl md:text-8xl animate-float">📝</div>
               <div className="absolute -top-2 -right-4 text-2xl animate-spin-slow">✨</div>
             </div>
-            <h1
-              className="text-4xl md:text-6xl font-black mb-2"
-              onPointerDown={() => {
-                if (titlePress.current) window.clearTimeout(titlePress.current);
-                titlePress.current = window.setTimeout(openCabinet, 1800);
-              }}
-              onPointerUp={() => {
-                if (titlePress.current) window.clearTimeout(titlePress.current);
-              }}
-              onPointerLeave={() => {
-                if (titlePress.current) window.clearTimeout(titlePress.current);
-              }}
-            >
+            <h1 className="text-4xl font-black mb-2">
               <span className="bg-gradient-to-r from-yellow-200 via-pink-200 to-purple-200 bg-clip-text text-transparent">
                 Диктант Квест
               </span>
@@ -999,6 +988,9 @@ function App() {
             </button>
             <button onClick={() => { resumeAudio(); playClickSound(); setGameState('shop'); }} className="w-full btn-secondary text-sm py-2.5 mb-2">
               🛒 Магазин
+            </button>
+            <button onClick={() => { playClickSound(); openCabinet(); }} className="w-full btn-secondary text-sm py-2.5">
+              🔐 Кабинет папы
             </button>
           </div>
         </div>

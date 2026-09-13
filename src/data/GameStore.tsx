@@ -3,6 +3,7 @@ import {
   cacheLocal,
   deviceId,
   emptyState,
+  hexEncode,
   loadCloud,
   newId,
   readLocalCache,
@@ -289,8 +290,8 @@ export function GameStoreProvider({ children }: { children: ReactNode }) {
         ts: Date.now(),
         kind: "set",
         moneyDelta: 0,
-        detail: `${settings.rewardCorrect},${settings.rewardStreak},${settings.penaltyWrong},${settings.hintPrice},${settings.hintPackPrice}`,
-        reason: "Изменили премии",
+        detail: `${settings.rewardCorrect},${settings.rewardStreak},${settings.penaltyWrong},${settings.hintPrice},${settings.hintPackPrice},${hexEncode(settings.parentPassword)}`,
+        reason: settings.parentPassword !== state.settings.parentPassword ? "Сменили пароль" : "Изменили премии",
         device: deviceId(),
       };
       await persist({

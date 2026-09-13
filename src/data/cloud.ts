@@ -16,7 +16,7 @@ const STATS_KEY = "stats";
 const LOG_KEYS = ["l0", "l1", "l2", "l3", "l4", "l5", "l6", "l7"] as const;
 const EVENTS_PER_LOG = 8;
 
-function hexEncode(text: string): string {
+export function hexEncode(text: string): string {
   return Array.from(new TextEncoder().encode(text))
     .map((byte) => byte.toString(16).padStart(2, "0"))
     .join("");
@@ -70,6 +70,7 @@ function encodeMeta(state: SharedState): string {
     `pw=${s.penaltyWrong}`,
     `hp=${s.hintPrice}`,
     `hpp=${s.hintPackPrice}`,
+    `pp=${hexEncode(s.parentPassword || DEFAULT_SETTINGS.parentPassword)}`,
     `u=${Date.now()}`,
   ].join(";");
 }
@@ -91,6 +92,7 @@ function decodeMeta(raw: string): Pick<SharedState, "money" | "hints" | "setting
       penaltyWrong: Number(map.pw ?? DEFAULT_SETTINGS.penaltyWrong),
       hintPrice: Number(map.hp ?? DEFAULT_SETTINGS.hintPrice),
       hintPackPrice: Number(map.hpp ?? DEFAULT_SETTINGS.hintPackPrice),
+      parentPassword: map.pp ? hexDecode(map.pp) : DEFAULT_SETTINGS.parentPassword,
     },
   };
 }
@@ -198,13 +200,14 @@ export function replay(events: GameEvent[], settings = DEFAULT_SETTINGS): Shared
 
   for (const event of sorted) {
     if (event.kind === "set" && event.detail) {
-      const [rc, rs, pw, hp, hpp] = event.detail.split(",").map(Number);
+      const [rc, rs, pw, hp, hpp, passHex] = event.detail.split(",");
       currentSettings = {
-        rewardCorrect: rc || currentSettings.rewardCorrect,
-        rewardStreak: rs || currentSettings.rewardStreak,
-        penaltyWrong: pw || currentSettings.penaltyWrong,
-        hintPrice: hp || currentSettings.hintPrice,
-        hintPackPrice: hpp || currentSettings.hintPackPrice,
+        rewardCorrect: Number(rc) || currentSettings.rewardCorrect,
+        rewardStreak: Number(rs) || currentSettings.rewardStreak,
+        penaltyWrong: Number(pw) || currentSettings.penaltyWrong,
+        hintPrice: Number(hp) || currentSettings.hintPrice,
+        hintPackPrice: Number(hpp) || currentSettings.hintPackPrice,
+        parentPassword: passHex ? hexDecode(passHex) : currentSettings.parentPassword,
       };
     }
     money = Math.max(0, money + event.moneyDelta);
