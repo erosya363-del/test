@@ -1,0 +1,12 @@
+{
+  "note": "Снимок схемы общей базы. Живые деньги и журнал пишутся в облако, чтобы их было видно с любого телефона.",
+  "money": 2000,
+  "hints": 3,
+  "settings": {
+    "rewardCorrect": 5,
+    "rewardStreak": 10,
+    "penaltyWrong": 3,
+    "hintPrice": 15,
+    "hintPackPrice": 40
+  }
+}

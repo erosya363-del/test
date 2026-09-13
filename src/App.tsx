@@ -1,5 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { playCorrectSound, playWrongSound, playCoinSound, playClickSound, playShowSound, resumeAudio } from './sounds';
+import { PapaCabinet } from './admin/PapaCabinet';
+import { useGameStore } from './data/GameStore';
 
 const a = '\u0301'; // combining acute accent
 
@@ -477,16 +479,11 @@ interface FixState {
 }
 
 function App() {
+  const store = useGameStore();
+  const { money, hints, settings } = store;
+  const [cabinetOpen, setCabinetOpen] = useState(() => window.location.hash === '#papa');
   const [gameState, setGameState] = useState<GameState>('splash');
   const [currentWordIndex, setCurrentWordIndex] = useState(0);
-  const [money, setMoney] = useState(() => {
-    const saved = localStorage.getItem('dictation_money');
-    return saved ? parseInt(saved) : 0;
-  });
-  const [hints, setHints] = useState(() => {
-    const saved = localStorage.getItem('dictation_hints');
-    return saved ? parseInt(saved) : 3;
-  });
   const [score, setScore] = useState(0);
   const [mistakes, setMistakes] = useState(0);
   const [currentErrorVariant, setCurrentErrorVariant] = useState(0);
@@ -503,12 +500,16 @@ function App() {
   const [userFixedWord, setUserFixedWord] = useState<string>('');
 
   useEffect(() => {
-    localStorage.setItem('dictation_money', money.toString());
-  }, [money]);
+    const onHash = () => setCabinetOpen(window.location.hash === '#papa');
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
 
-  useEffect(() => {
-    localStorage.setItem('dictation_hints', hints.toString());
-  }, [hints]);
+  const titlePress = useRef<number | null>(null);
+  const openCabinet = () => {
+    window.location.hash = 'papa';
+    setCabinetOpen(true);
+  };
 
   useEffect(() => {
     if (gameState === 'splash') {
@@ -577,7 +578,16 @@ function App() {
     if (errorData.errorType === 'none') {
       // Ошибки нет, а он сказал что есть
       setFeedback('wrong');
-      setMoney(prev => Math.max(0, prev - 3));
+      void store.applyAnswer({
+        ok: false,
+        word: word.correctPlain,
+        shown: errorData.wrong,
+        expected: word.correct,
+        choice: 'Сказал, что есть ошибка',
+        errorType: 'none',
+        detail: 'Ошибки не было',
+        streakAfter: 0,
+      });
       setMistakes(prev => prev + 1);
       setStreak(0);
       playWrongSound();
@@ -598,11 +608,20 @@ function App() {
     if (errorData.errorType === 'none') {
       // Верно!
       setFeedback('correct');
-      const reward = streak >= 2 ? 10 : 5;
-      setMoney(prev => prev + reward);
+      const newStreak = streak + 1;
+      const reward = newStreak >= 2 ? settings.rewardStreak : settings.rewardCorrect;
+      void store.applyAnswer({
+        ok: true,
+        word: word.correctPlain,
+        shown: errorData.wrong,
+        expected: word.correct,
+        choice: 'Сказал, что всё верно',
+        errorType: 'none',
+        detail: 'Ошибки не было — правильно',
+        streakAfter: newStreak,
+      });
       setTotalEarned(prev => prev + reward);
       setScore(prev => prev + 1);
-      const newStreak = streak + 1;
       setStreak(newStreak);
       if (newStreak > bestStreak) setBestStreak(newStreak);
       setShowConfetti(true);
@@ -614,7 +633,16 @@ function App() {
     } else {
       // Ошибка была, а он сказал что всё верно
       setFeedback('wrong');
-      setMoney(prev => Math.max(0, prev - 3));
+      void store.applyAnswer({
+        ok: false,
+        word: word.correctPlain,
+        shown: errorData.wrong,
+        expected: word.correct,
+        choice: 'Сказал, что всё верно',
+        errorType: errorData.errorType,
+        detail: 'Ошибка была, пропустил',
+        streakAfter: 0,
+      });
       setMistakes(prev => prev + 1);
       setStreak(0);
       setMistakeWords(prev => {
@@ -686,11 +714,20 @@ function App() {
     if (option === fixState.correctLetter) {
       // Правильно!
       setFeedback('correct');
-      const reward = streak >= 2 ? 10 : 5;
-      setMoney(prev => prev + reward);
+      const newStreak = streak + 1;
+      const reward = newStreak >= 2 ? settings.rewardStreak : settings.rewardCorrect;
+      void store.applyAnswer({
+        ok: true,
+        word: word.correctPlain,
+        shown: wrongWord,
+        expected: word.correct,
+        choice: `Исправил на «${option}»`,
+        errorType: errorData.errorType,
+        detail: 'Нашёл ошибку и поправил',
+        streakAfter: newStreak,
+      });
       setTotalEarned(prev => prev + reward);
       setScore(prev => prev + 1);
-      const newStreak = streak + 1;
       setStreak(newStreak);
       if (newStreak > bestStreak) setBestStreak(newStreak);
       setShowConfetti(true);
@@ -701,7 +738,16 @@ function App() {
     } else {
       // Неправильно
       setFeedback('wrong');
-      setMoney(prev => Math.max(0, prev - 3));
+      void store.applyAnswer({
+        ok: false,
+        word: word.correctPlain,
+        shown: wrongWord,
+        expected: word.correct,
+        choice: `Выбрал «${option}»`,
+        errorType: errorData.errorType,
+        detail: 'Не ту букву поставил',
+        streakAfter: 0,
+      });
       setMistakes(prev => prev + 1);
       setStreak(0);
       setMistakeWords(prev => {
@@ -719,7 +765,7 @@ function App() {
   const useHint = () => {
     if (hints > 0) {
       playClickSound();
-      setHints(prev => prev - 1);
+      void store.applyHint();
       setShowHint(true);
     }
   };
@@ -773,26 +819,17 @@ function App() {
   };
 
   const buyHint = () => {
-    if (money >= 15) {
+    if (money >= settings.hintPrice) {
       playCoinSound();
-      setMoney(prev => prev - 15);
-      setHints(prev => prev + 1);
+      void store.applyShop(false);
     }
   };
 
   const buyHintPack = () => {
-    if (money >= 40) {
+    if (money >= settings.hintPackPrice) {
       playCoinSound();
-      setMoney(prev => prev - 40);
-      setHints(prev => prev + 3);
+      void store.applyShop(true);
     }
-  };
-
-  const resetGame = () => {
-    setMoney(0);
-    setHints(3);
-    localStorage.setItem('dictation_money', '0');
-    localStorage.setItem('dictation_hints', '3');
   };
 
   const currentWord = wordsOrder.length > 0 && wordsOrder[currentWordIndex] !== undefined ? WORDS[wordsOrder[currentWordIndex]] : null;
@@ -808,6 +845,21 @@ function App() {
     if (currentError.errorType === 'stress') return `🎵 Найди неверное ударение`;
     return '';
   };
+
+  if (cabinetOpen) {
+    return (
+      <div className="app-shell bg-gradient-to-br from-[#0f0c29] via-[#302b63] to-[#24243e] text-white">
+        <PapaCabinet
+          onClose={() => {
+            if (window.location.hash === '#papa') {
+              history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
+            }
+            setCabinetOpen(false);
+          }}
+        />
+      </div>
+    );
+  }
 
   // Splash Screen
   if (gameState === 'splash') {
@@ -899,7 +951,19 @@ function App() {
               <div className="text-7xl md:text-8xl animate-float">📝</div>
               <div className="absolute -top-2 -right-4 text-2xl animate-spin-slow">✨</div>
             </div>
-            <h1 className="text-4xl md:text-6xl font-black mb-2">
+            <h1
+              className="text-4xl md:text-6xl font-black mb-2"
+              onPointerDown={() => {
+                if (titlePress.current) window.clearTimeout(titlePress.current);
+                titlePress.current = window.setTimeout(openCabinet, 1800);
+              }}
+              onPointerUp={() => {
+                if (titlePress.current) window.clearTimeout(titlePress.current);
+              }}
+              onPointerLeave={() => {
+                if (titlePress.current) window.clearTimeout(titlePress.current);
+              }}
+            >
               <span className="bg-gradient-to-r from-yellow-200 via-pink-200 to-purple-200 bg-clip-text text-transparent">
                 Диктант Квест
               </span>
@@ -911,9 +975,9 @@ function App() {
 
           <div className="glass-card max-w-sm w-full animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
             <div className="space-y-2 mb-4">
-              <RuleRow emoji="✅" bg="from-green-500/20 to-emerald-500/20" border="border-green-400/30" text="Правильно" reward="+5 ₽" textColor="text-green-200" rewardColor="text-green-300" />
-              <RuleRow emoji="🔥" bg="from-orange-500/20 to-red-500/20" border="border-orange-400/30" text="Серия 3+" reward="+10 ₽" textColor="text-orange-200" rewardColor="text-orange-300" />
-              <RuleRow emoji="❌" bg="from-red-500/20 to-pink-500/20" border="border-red-400/30" text="Ошибка" reward="-3 ₽" textColor="text-red-200" rewardColor="text-red-300" />
+              <RuleRow emoji="✅" bg="from-green-500/20 to-emerald-500/20" border="border-green-400/30" text="Правильно" reward={`+${settings.rewardCorrect} ₽`} textColor="text-green-200" rewardColor="text-green-300" />
+              <RuleRow emoji="🔥" bg="from-orange-500/20 to-red-500/20" border="border-orange-400/30" text="Серия 3+" reward={`+${settings.rewardStreak} ₽`} textColor="text-orange-200" rewardColor="text-orange-300" />
+              <RuleRow emoji="❌" bg="from-red-500/20 to-pink-500/20" border="border-red-400/30" text="Ошибка" reward={`-${settings.penaltyWrong} ₽`} textColor="text-red-200" rewardColor="text-red-300" />
             </div>
 
             <div className="bg-white/5 rounded-2xl p-3 mb-4 border border-white/10">
@@ -936,11 +1000,6 @@ function App() {
             <button onClick={() => { resumeAudio(); playClickSound(); setGameState('shop'); }} className="w-full btn-secondary text-sm py-2.5 mb-2">
               🛒 Магазин
             </button>
-            {money > 0 && (
-              <button onClick={resetGame} className="w-full text-red-300/60 hover:text-red-300 text-xs py-2 transition-colors">
-                🔄 Сбросить прогресс
-              </button>
-            )}
           </div>
         </div>
       )}
@@ -955,8 +1014,8 @@ function App() {
           </div>
 
           <div className="glass-card max-w-sm w-full space-y-3 animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
-            <ShopItem emoji="💡" title="Подсказка" desc="Покажет что искать" price={15} owned={hints} canBuy={money >= 15} gradient="from-blue-500/20 to-cyan-500/20" border="border-blue-400/30" onBuy={buyHint} />
-            <ShopItem emoji="🎁" title="Набор +3" desc="Три подсказки сразу" price={40} owned={hints} canBuy={money >= 40} gradient="from-purple-500/20 to-pink-500/20" border="border-purple-400/30" onBuy={buyHintPack} isPack />
+            <ShopItem emoji="💡" title="Подсказка" desc="Покажет что искать" price={settings.hintPrice} owned={hints} canBuy={money >= settings.hintPrice} gradient="from-blue-500/20 to-cyan-500/20" border="border-blue-400/30" onBuy={buyHint} />
+            <ShopItem emoji="🎁" title="Набор +3" desc="Три подсказки сразу" price={settings.hintPackPrice} owned={hints} canBuy={money >= settings.hintPackPrice} gradient="from-purple-500/20 to-pink-500/20" border="border-purple-400/30" onBuy={buyHintPack} isPack />
           </div>
 
           <button onClick={() => { playClickSound(); setGameState('menu'); }} className="mt-5 btn-secondary px-8 py-3 animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
@@ -1116,8 +1175,8 @@ function App() {
                   )}
                 </div>
                 <div className="play-money text-yellow-300">
-                  +{streak >= 3 ? 10 : 5} ₽ 💰
-                  {streak >= 3 && <span className="text-orange-400 ml-2">🔥</span>}
+                  +{streak >= 2 ? settings.rewardStreak : settings.rewardCorrect} ₽ 💰
+                  {streak >= 2 && <span className="text-orange-400 ml-2">🔥</span>}
                 </div>
               </div>
             ) : (
@@ -1133,7 +1192,7 @@ function App() {
                     </div>
                   )}
                 </div>
-                <div className="play-money text-red-300">-3 ₽ 💸</div>
+                <div className="play-money text-red-300">-{settings.penaltyWrong} ₽ 💸</div>
               </div>
             )}
             <button onClick={nextWord} className="play-cta btn-primary">
