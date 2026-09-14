@@ -13,8 +13,13 @@ import {
 const BASE = "https://keyvalue.immanuel.co/api/KeyVal";
 const META_KEY = "meta";
 const STATS_KEY = "stats";
+const LOCK_KEY = "lock";
+const EIDS_KEY = "eids";
 const LOG_KEYS = ["l0", "l1", "l2", "l3", "l4", "l5", "l6", "l7"] as const;
 const EVENTS_PER_LOG = 8;
+/** Пустой слот: API не любит пустую строку, а "-" раньше ломал разбор. */
+const EMPTY_SLOT = ".";
+const LOCK_TTL_MS = 8000;
 
 export function hexEncode(text: string): string {
   return Array.from(new TextEncoder().encode(text))
@@ -41,23 +46,30 @@ function unwrap(raw: string): string {
   return trimmed.replace(/^\[?"|"\]?$/g, "");
 }
 
+function isEmptySlot(value: string): boolean {
+  return !value || value === "." || value === "-" || value === "x" || value === "null" || value === "undefined";
+}
+
 async function cloudGet(key: string): Promise<string> {
   const stamp = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   const response = await fetch(`${BASE}/GetValue/${CLOUD_APP_KEY}/${key}?t=${stamp}`, {
     cache: "no-store",
     headers: { "Cache-Control": "no-cache", Pragma: "no-cache" },
   });
+  // Пустой ключ у этого API даёт 500 DBNull. Это не «базы нет».
+  if (response.status === 404 || response.status === 500) {
+    return "";
+  }
   if (!response.ok) {
     throw new Error("Не удалось прочитать общую базу");
   }
-  return unwrap(await response.text());
+  const value = unwrap(await response.text());
+  return isEmptySlot(value) ? "" : value;
 }
 
 async function cloudSet(key: string, value: string): Promise<void> {
-  if (value.length > 1000) {
-    value = value.slice(0, 1000);
-  }
-  const url = `${BASE}/UpdateValue/${CLOUD_APP_KEY}/${key}/${encodeURIComponent(value)}?t=${Date.now()}`;
+  const body = value && !isEmptySlot(value) ? value.slice(0, 1000) : EMPTY_SLOT;
+  const url = `${BASE}/UpdateValue/${CLOUD_APP_KEY}/${key}/${encodeURIComponent(body)}?t=${Date.now()}`;
   const response = await fetch(url, {
     method: "POST",
     cache: "no-store",
@@ -68,7 +80,7 @@ async function cloudSet(key: string, value: string): Promise<void> {
   }
 }
 
-function encodeMeta(state: SharedState): string {
+function encodeMeta(state: SharedState, updatedAt = Date.now()): string {
   const s = state.settings;
   return [
     `m=${state.money}`,
@@ -79,12 +91,12 @@ function encodeMeta(state: SharedState): string {
     `hp=${s.hintPrice}`,
     `hpp=${s.hintPackPrice}`,
     `pp=${hexEncode(s.parentPassword || DEFAULT_SETTINGS.parentPassword)}`,
-    `u=${Date.now()}`,
+    `u=${updatedAt}`,
   ].join(";");
 }
 
 function parseMetaMap(raw: string): Record<string, string> | null {
-  if (!raw || !raw.includes("m=")) return null;
+  if (isEmptySlot(raw) || !raw.includes("m=")) return null;
   return Object.fromEntries(
     raw.split(";").map((part) => {
       const idx = part.indexOf("=");
@@ -93,12 +105,15 @@ function parseMetaMap(raw: string): Record<string, string> | null {
   );
 }
 
-function decodeMeta(raw: string): Pick<SharedState, "money" | "hints" | "settings"> | null {
+function decodeMeta(
+  raw: string,
+): (Pick<SharedState, "money" | "hints" | "settings"> & { updatedAt: number }) | null {
   const map = parseMetaMap(raw);
   if (!map) return null;
   return {
     money: Number(map.m ?? 0),
     hints: Number(map.h ?? START_HINTS),
+    updatedAt: Number(map.u ?? 0),
     settings: {
       rewardCorrect: Number(map.rc ?? DEFAULT_SETTINGS.rewardCorrect),
       rewardStreak: Number(map.rs ?? DEFAULT_SETTINGS.rewardStreak),
@@ -124,7 +139,7 @@ function encodeStats(stats: Record<string, WordStat>): string {
 
 function decodeStats(raw: string): Record<string, WordStat> {
   const stats: Record<string, WordStat> = {};
-  if (!raw) return stats;
+  if (isEmptySlot(raw)) return stats;
   for (const part of raw.split("|")) {
     const [wordHex, nums] = part.split(":");
     if (!wordHex || !nums) continue;
@@ -155,6 +170,7 @@ function encodeEvent(event: GameEvent): string {
 }
 
 function decodeEvent(raw: string): GameEvent | null {
+  if (isEmptySlot(raw) || !raw.includes("~")) return null;
   const p = raw.split("~");
   if (p.length < 10) return null;
   const kind = p[2] as EventKind;
@@ -187,7 +203,7 @@ function encodeLog(events: GameEvent[]): string {
 }
 
 function decodeLog(raw: string): GameEvent[] {
-  if (!raw) return [];
+  if (isEmptySlot(raw)) return [];
   return raw
     .split("/")
     .map(decodeEvent)
@@ -196,11 +212,40 @@ function decodeLog(raw: string): GameEvent[] {
 
 export function emptyState(): SharedState {
   return {
-    money: START_BALANCE,
+    money: 0,
     hints: START_HINTS,
     settings: { ...DEFAULT_SETTINGS },
     events: [],
     wordStats: {},
+    recentIds: [],
+  };
+}
+
+export function applyRemoteEvent(remote: SharedState, event: GameEvent, local: SharedState): SharedState {
+  const known = new Set([...(remote.recentIds ?? []), ...remote.events.map((item) => item.id)]);
+  if (known.has(event.id)) {
+    return remote;
+  }
+  const nextStats = { ...remote.wordStats };
+  if ((event.kind === "ok" || event.kind === "bad") && event.word) {
+    const prev = nextStats[event.word] ?? { word: event.word, seen: 0, ok: 0, bad: 0 };
+    nextStats[event.word] = {
+      word: event.word,
+      seen: prev.seen + 1,
+      ok: prev.ok + (event.kind === "ok" ? 1 : 0),
+      bad: prev.bad + (event.kind === "bad" ? 1 : 0),
+      lastTs: event.ts,
+      lastShown: event.shown ?? prev.lastShown,
+    };
+  }
+  const recentIds = [event.id, ...(remote.recentIds ?? [])].filter((id, index, all) => all.indexOf(id) === index).slice(0, 8);
+  return {
+    money: Math.max(0, remote.money + event.moneyDelta),
+    hints: Math.max(0, remote.hints + (event.hintDelta ?? 0)),
+    settings: event.kind === "set" ? local.settings : remote.settings,
+    events: [...remote.events, event].sort((a, b) => a.ts - b.ts || a.id.localeCompare(b.id)),
+    wordStats: nextStats,
+    recentIds,
   };
 }
 
@@ -261,43 +306,71 @@ export function mergeStats(remote: Record<string, WordStat>, local: Record<strin
 }
 
 export function mergeIncoming(remote: SharedState, incoming: GameEvent[], local: SharedState): SharedState {
-  const known = new Set(remote.events.map((event) => event.id));
-  const fresh = incoming.filter((event) => !known.has(event.id));
-  const lastSet = [...fresh].reverse().find((event) => event.kind === "set");
+  let merged = remote;
+  for (const event of incoming) {
+    merged = applyRemoteEvent(merged, event, local);
+  }
+  return merged;
+}
+
+export async function peekCloudMeta(): Promise<{
+  money: number;
+  hints: number;
+  updatedAt: number;
+  settings: Settings;
+  recentIds: string[];
+} | null> {
+  const [raw, eidsRaw] = await Promise.all([cloudGet(META_KEY), cloudGet(EIDS_KEY)]);
+  const meta = decodeMeta(raw);
+  if (!meta) return null;
   return {
-    money: Math.max(0, remote.money + fresh.reduce((sum, event) => sum + event.moneyDelta, 0)),
-    hints: Math.max(0, remote.hints + fresh.reduce((sum, event) => sum + (event.hintDelta ?? 0), 0)),
-    settings: lastSet ? local.settings : remote.settings,
-    events: [...remote.events, ...fresh].sort((a, b) => a.ts - b.ts || a.id.localeCompare(b.id)),
-    wordStats: mergeStats(remote.wordStats, local.wordStats),
+    money: meta.money,
+    hints: meta.hints,
+    updatedAt: meta.updatedAt,
+    settings: meta.settings,
+    recentIds: isEmptySlot(eidsRaw) ? [] : eidsRaw.split("_").filter(Boolean).slice(0, 8),
   };
 }
 
-export async function peekCloudMeta(): Promise<{ money: number; hints: number; updatedAt: number } | null> {
-  const raw = await cloudGet(META_KEY);
-  const map = parseMetaMap(raw);
-  if (!map) return null;
+/** Только meta — быстрый путь для ярлыков iPhone, даже если журнал 500. */
+export async function loadCloudMetaState(): Promise<SharedState | null> {
+  const meta = await peekCloudMeta();
+  if (!meta) return null;
   return {
-    money: Number(map.m ?? 0),
-    hints: Number(map.h ?? START_HINTS),
-    updatedAt: Number(map.u ?? 0),
+    ...emptyState(),
+    money: meta.money,
+    hints: meta.hints,
+    settings: meta.settings,
+    recentIds: meta.recentIds,
   };
 }
 
 export async function loadCloud(): Promise<SharedState | null> {
-  const [metaRaw, statsRaw, ...logsRaw] = await Promise.all([
-    cloudGet(META_KEY),
-    cloudGet(STATS_KEY),
-    ...LOG_KEYS.map((key) => cloudGet(key)),
-  ]);
+  const [metaRaw, eidsRaw] = await Promise.all([cloudGet(META_KEY), cloudGet(EIDS_KEY)]);
+  const meta = decodeMeta(metaRaw);
+  if (!meta) return null;
+  const recentIds = isEmptySlot(eidsRaw) ? [] : eidsRaw.split("_").filter(Boolean).slice(0, 8);
+
+  let statsRaw = "";
+  let logsRaw: string[] = LOG_KEYS.map(() => "");
+  try {
+    [statsRaw, ...logsRaw] = await Promise.all([
+      cloudGet(STATS_KEY),
+      ...LOG_KEYS.map((key) => cloudGet(key)),
+    ]);
+  } catch {
+    return {
+      ...emptyState(),
+      money: meta.money,
+      hints: meta.hints,
+      settings: meta.settings,
+      recentIds,
+    };
+  }
+
   const events = logsRaw.flatMap(decodeLog);
   const unique = new Map(events.map((event) => [event.id, event]));
   const uniqueEvents = [...unique.values()];
-  const meta = decodeMeta(metaRaw);
-  if (!meta) {
-    if (uniqueEvents.length === 0 && !statsRaw) return null;
-    return replay(uniqueEvents);
-  }
   const state = replay(uniqueEvents, meta.settings);
   if (Object.keys(state.wordStats).length === 0) {
     state.wordStats = decodeStats(statsRaw);
@@ -305,18 +378,136 @@ export async function loadCloud(): Promise<SharedState | null> {
   state.money = meta.money;
   state.hints = meta.hints;
   state.settings = meta.settings;
+  state.recentIds = recentIds;
   return state;
 }
 
 export async function saveCloud(state: SharedState): Promise<void> {
-  const newest = [...state.events].sort((a, b) => b.ts - a.ts);
-  const chunks: GameEvent[][] = [];
-  for (let i = 0; i < LOG_KEYS.length; i += 1) {
-    chunks.push(newest.slice(i * EVENTS_PER_LOG, (i + 1) * EVENTS_PER_LOG));
+  const updatedAt = Date.now();
+  const recentIds = (state.recentIds ?? []).slice(0, 8);
+  // Сначала id хода — иначе при повторе тот же ход начислится дважды.
+  try {
+    await cloudSet(EIDS_KEY, recentIds.join("_") || EMPTY_SLOT);
+  } catch {
+    /* eids */
   }
-  await cloudSet(META_KEY, encodeMeta(state));
-  await cloudSet(STATS_KEY, encodeStats(state.wordStats));
-  await Promise.all(LOG_KEYS.map((key, index) => cloudSet(key, encodeLog(chunks[index] ?? []))));
+  await cloudSet(META_KEY, encodeMeta(state, updatedAt));
+  const verify = await cloudGet(META_KEY).then(decodeMeta);
+  if (!verify || verify.money !== state.money || verify.hints !== state.hints) {
+    throw new Error("Облако не подтвердило баланс");
+  }
+
+  const stats = encodeStats(state.wordStats);
+  try {
+    await cloudSet(STATS_KEY, stats);
+  } catch {
+    /* журнал слов не должен ронять баланс */
+  }
+
+  const newest = [...state.events].sort((a, b) => b.ts - a.ts);
+  await Promise.all(
+    LOG_KEYS.map(async (key, index) => {
+      const packed = encodeLog(newest.slice(index * EVENTS_PER_LOG, (index + 1) * EVENTS_PER_LOG));
+      try {
+        await cloudSet(key, packed);
+      } catch {
+        /* кусок журнала мог не влезть — meta уже записана */
+      }
+    }),
+  );
+}
+
+async function acquireCloudLock(owner: string): Promise<boolean> {
+  const existing = await cloudGet(LOCK_KEY);
+  if (existing && existing.includes("|")) {
+    const ts = Number(existing.split("|")[1] ?? 0);
+    if (ts && Date.now() - ts < LOCK_TTL_MS && !existing.startsWith(`${owner}|`)) {
+      return false;
+    }
+  }
+  const stamp = `${owner}|${Date.now()}|${Math.random().toString(36).slice(2, 7)}`;
+  await cloudSet(LOCK_KEY, stamp);
+  await new Promise((resolve) => setTimeout(resolve, 160));
+  const raw = await cloudGet(LOCK_KEY);
+  return raw === stamp;
+}
+
+async function releaseCloudLock(owner: string): Promise<void> {
+  const raw = await cloudGet(LOCK_KEY);
+  if (raw.startsWith(`${owner}|`)) {
+    await cloudSet(LOCK_KEY, EMPTY_SLOT);
+  }
+}
+
+/** Запись события поверх свежей meta. Замок + повтор, чтобы два ярлыка не затирали плюс/минус. */
+export async function commitEvent(event: GameEvent, local: SharedState): Promise<SharedState> {
+  let lastError: unknown;
+  const owner = `${event.id}`;
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    try {
+      const locked = await acquireCloudLock(owner);
+      if (!locked) {
+        await new Promise((resolve) => setTimeout(resolve, 100 + attempt * 70));
+        continue;
+      }
+      try {
+        const remote = (await loadCloud()) ?? (await loadCloudMetaState());
+        if (!remote) {
+          throw new Error("Общая база пуста");
+        }
+        if ((remote.recentIds ?? []).includes(event.id) || remote.events.some((item) => item.id === event.id)) {
+          return remote;
+        }
+        const merged = applyRemoteEvent(remote, event, local);
+        await saveCloud(merged);
+        const check = await peekCloudMeta();
+        if (!check) {
+          throw new Error("Гонка записи, повторяем");
+        }
+        if (check.money === merged.money && check.hints === merged.hints) {
+          return { ...merged, recentIds: check.recentIds.length ? check.recentIds : merged.recentIds };
+        }
+        // Meta уже могла принять наш ход, а verify прочитал чужой кадр — не дублируем.
+        if ((check.recentIds ?? []).includes(event.id)) {
+          return {
+            ...merged,
+            money: check.money,
+            hints: check.hints,
+            settings: check.settings,
+            recentIds: check.recentIds,
+          };
+        }
+        throw new Error("Гонка записи, повторяем");
+      } finally {
+        await releaseCloudLock(owner);
+      }
+    } catch (error) {
+      lastError = error;
+      await new Promise((resolve) => setTimeout(resolve, 120 + attempt * 80));
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("Не удалось записать в облако");
+}
+
+export async function ensureCloudSeeded(): Promise<SharedState> {
+  const existing = (await loadCloud()) ?? (await loadCloudMetaState());
+  if (existing) return existing;
+
+  const seed: GameEvent = {
+    id: newId(),
+    ts: Date.now(),
+    kind: "seed",
+    moneyDelta: START_BALANCE,
+    reason: "Стартовый баланс",
+    device: "boot",
+  };
+  const initial: SharedState = {
+    ...emptyState(),
+    money: START_BALANCE,
+    events: [seed],
+  };
+  await saveCloud(initial);
+  return initial;
 }
 
 export function mergeStates(remote: SharedState, incoming: GameEvent[]): SharedState {
@@ -340,13 +531,16 @@ export function cacheLocal(state: SharedState) {
   localStorage.setItem("dictation_money", String(state.money));
   localStorage.setItem("dictation_hints", String(state.hints));
   localStorage.setItem("dictation_cloud_cache", JSON.stringify(state));
+  localStorage.setItem("dictation_cloud_rev", String(Date.now()));
 }
 
 export function readLocalCache(): SharedState | null {
   try {
     const raw = localStorage.getItem("dictation_cloud_cache");
     if (!raw) return null;
-    return JSON.parse(raw) as SharedState;
+    const parsed = JSON.parse(raw) as SharedState;
+    if (!parsed || typeof parsed.money !== "number") return null;
+    return parsed;
   } catch {
     return null;
   }

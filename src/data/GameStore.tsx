@@ -1,17 +1,18 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   cacheLocal,
+  commitEvent,
   deviceId,
   emptyState,
+  ensureCloudSeeded,
   hexEncode,
   loadCloud,
-  mergeIncoming,
+  loadCloudMetaState,
   newId,
   peekCloudMeta,
   readLocalCache,
-  saveCloud,
 } from "./cloud";
-import { START_BALANCE, START_HINTS, type GameEvent, type Settings, type SharedState } from "./types";
+import { START_HINTS, type GameEvent, type Settings, type SharedState } from "./types";
 
 type AnswerInput = {
   ok: boolean;
@@ -75,24 +76,15 @@ export function GameStoreProvider({ children }: { children: ReactNode }) {
       return enqueue(async () => {
         setSyncing(true);
         try {
-          for (let attempt = 0; attempt < 6; attempt += 1) {
-            const remote = await loadCloud();
-            if (!remote) {
-              await saveCloud(stateRef.current);
-              continue;
-            }
-            const incoming = stateRef.current.events.filter(
-              (item) => item.id === event.id || !remote.events.some((row) => row.id === item.id),
-            );
-            if (!incoming.some((item) => item.id === event.id)) incoming.push(event);
-            const merged = mergeIncoming(remote, incoming, stateRef.current);
-            await saveCloud(merged);
-            const check = await loadCloud();
-            if (check?.events.some((item) => item.id === event.id)) {
-              adopt(check);
-              return;
-            }
-            adopt(merged);
+          const merged = await commitEvent(event, stateRef.current);
+          adopt(merged);
+        } catch {
+          // Локально уже показали ход; при следующем refresh подтянем правду из облака.
+          try {
+            const remote = (await loadCloud()) ?? (await loadCloudMetaState());
+            if (remote) adopt(remote);
+          } catch {
+            /* офлайн */
           }
         } finally {
           pendingWrites.current = Math.max(0, pendingWrites.current - 1);
@@ -103,50 +95,51 @@ export function GameStoreProvider({ children }: { children: ReactNode }) {
     [adopt, enqueue],
   );
 
-  const refresh = useCallback((silent = true) => {
-    return enqueue(async () => {
-      if (pendingWrites.current > 0) return;
-      if (!silent) setSyncing(true);
-      try {
-        const remote = await loadCloud();
+  const refresh = useCallback(
+    (silent = true) => {
+      return enqueue(async () => {
         if (pendingWrites.current > 0) return;
-        if (remote) adopt(remote);
-      } finally {
-        if (!silent) setSyncing(false);
-      }
-    });
-  }, [adopt, enqueue]);
+        if (!silent) setSyncing(true);
+        try {
+          const remote = (await loadCloud()) ?? (await loadCloudMetaState());
+          if (pendingWrites.current > 0) return;
+          if (remote) adopt(remote);
+        } finally {
+          if (!silent) setSyncing(false);
+        }
+      });
+    },
+    [adopt, enqueue],
+  );
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const remote = await loadCloud();
-        if (cancelled) return;
-        if (remote) {
-          adopt(remote);
-        } else {
-          const seed: GameEvent = {
-            id: newId(),
-            ts: Date.now(),
-            kind: "seed",
-            moneyDelta: START_BALANCE,
-            hintDelta: 0,
-            reason: "Стартовый баланс",
-            device: deviceId(),
-          };
-          const initial = {
-            ...emptyState(),
-            money: START_BALANCE,
-            hints: START_HINTS,
-            events: [seed],
-          };
-          adopt(initial);
-          await saveCloud(initial);
-        }
+        // Сначала только meta — новый ярлык iPhone сразу видит общие деньги.
+        const quick = await loadCloudMetaState();
+        if (!cancelled && quick) adopt(quick);
+
+        const remote = (await loadCloud()) ?? quick ?? (await ensureCloudSeeded());
+        if (!cancelled) adopt(remote);
       } catch {
-        const cached = readLocalCache();
-        if (cached && !cancelled) adopt(cached);
+        try {
+          const peek = await peekCloudMeta();
+          if (peek && !cancelled) {
+            adopt({
+              ...emptyState(),
+              money: peek.money,
+              hints: peek.hints,
+              settings: peek.settings,
+            });
+          } else {
+            const cached = readLocalCache();
+            if (cached && !cancelled) adopt(cached);
+          }
+        } catch {
+          const cached = readLocalCache();
+          if (cached && !cancelled) adopt(cached);
+        }
       } finally {
         if (!cancelled) setReady(true);
       }
@@ -166,8 +159,8 @@ export function GameStoreProvider({ children }: { children: ReactNode }) {
       void refresh(true);
       window.clearTimeout(wakeTimerA);
       window.clearTimeout(wakeTimerB);
-      wakeTimerA = window.setTimeout(() => void refresh(true), 800);
-      wakeTimerB = window.setTimeout(() => void refresh(true), 2200);
+      wakeTimerA = window.setTimeout(() => void refresh(true), 700);
+      wakeTimerB = window.setTimeout(() => void refresh(true), 2000);
     };
 
     const onVisibility = () => {
@@ -190,15 +183,22 @@ export function GameStoreProvider({ children }: { children: ReactNode }) {
         if (!peek || pendingWrites.current > 0) return;
         const now = stateRef.current;
         if (peek.money === now.money && peek.hints === now.hints) return;
+        // Цифра в облаке другая — сразу ставим meta, журнал догоним refresh.
+        adopt({
+          ...now,
+          money: peek.money,
+          hints: peek.hints,
+          settings: peek.settings,
+        });
         await refresh(true);
       } catch {
-        /* сеть могла уснуть вместе с телефоном */
+        /* сеть уснула */
       }
     };
 
     const poll = window.setInterval(() => {
       void tick();
-    }, 3000);
+    }, 2500);
 
     document.addEventListener("visibilitychange", onVisibility);
     window.addEventListener("pageshow", wake);
@@ -215,7 +215,7 @@ export function GameStoreProvider({ children }: { children: ReactNode }) {
       window.removeEventListener("online", wake);
       document.removeEventListener("pointerdown", onPointer);
     };
-  }, [refresh]);
+  }, [adopt, refresh]);
 
   const applyAnswer = useCallback(
     async (input: AnswerInput) => {
@@ -304,6 +304,7 @@ export function GameStoreProvider({ children }: { children: ReactNode }) {
   const payout = useCallback(
     async (amount: number, reason: string) => {
       const cut = Math.min(stateRef.current.money, Math.max(0, Math.round(amount)));
+      if (cut <= 0) return;
       const event: GameEvent = {
         id: newId(),
         ts: Date.now(),

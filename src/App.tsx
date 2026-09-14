@@ -482,7 +482,7 @@ interface FixState {
 
 function App() {
   const store = useGameStore();
-  const { money, hints, settings } = store;
+  const { money, hints, settings, ready, syncing } = store;
   const [cabinetOpen, setCabinetOpen] = useState(() => window.location.hash === '#papa');
   const [gameState, setGameState] = useState<GameState>('splash');
   const [currentWordIndex, setCurrentWordIndex] = useState(0);
@@ -513,11 +513,10 @@ function App() {
   };
 
   useEffect(() => {
-    if (gameState === 'splash') {
-      const timer = setTimeout(() => setGameState('menu'), 2800);
-      return () => clearTimeout(timer);
-    }
-  }, [gameState]);
+    if (gameState !== 'splash' || !ready) return;
+    const timer = setTimeout(() => setGameState('menu'), 700);
+    return () => clearTimeout(timer);
+  }, [gameState, ready]);
 
   const generateWordsOrder = useCallback(() => {
     const baseOrder = [...Array(WORDS.length).keys()];
@@ -973,17 +972,20 @@ function App() {
               <div className="flex justify-between items-center">
                 <div>
                   <p className="text-xs text-white/50">Баланс</p>
-                  <p className="text-xl font-black text-yellow-300">{money} ₽</p>
+                  <p className="text-xl font-black text-yellow-300">{ready ? `${money} ₽` : "…"}</p>
                 </div>
                 <div className="w-px h-8 bg-white/10" />
                 <div className="text-center">
                   <p className="text-xs text-white/50">Подсказки</p>
-                  <p className="text-xl font-black text-blue-300">{hints} 💡</p>
+                  <p className="text-xl font-black text-blue-300">{ready ? `${hints} 💡` : "…"}</p>
                 </div>
               </div>
+              <p className="text-[11px] text-white/40 mt-2 text-center">
+                {syncing ? "Сохраняем в общую базу…" : "Один баланс на все телефоны и ярлыки"}
+              </p>
             </div>
 
-            <button onClick={startGame} className="w-full btn-primary text-base py-3.5 mb-2">
+            <button onClick={startGame} disabled={!ready} className="w-full btn-primary text-base py-3.5 mb-2 disabled:opacity-50">
               🚀 Начать!
             </button>
             <button onClick={() => { resumeAudio(); playClickSound(); setGameState('shop'); }} className="w-full btn-secondary text-sm py-2.5 mb-2">

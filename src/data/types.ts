@@ -48,6 +48,8 @@ export type SharedState = {
   settings: Settings;
   events: GameEvent[];
   wordStats: Record<string, WordStat>;
+  /** Последние id ходов из meta — чтобы не начислить один ход дважды */
+  recentIds?: string[];
 };
 
 export const DEFAULT_SETTINGS: Settings = {
