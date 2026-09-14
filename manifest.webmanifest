@@ -3,6 +3,7 @@
   "short_name": "Диктант",
   "description": "Подготовка к диктанту для 1 класса",
   "lang": "ru",
+  "id": "/test/",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
