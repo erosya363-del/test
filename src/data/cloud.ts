@@ -61,9 +61,9 @@ function isEmptySlot(value: string): boolean {
 
 async function cloudGet(key: string): Promise<string> {
   const stamp = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  // Без Cache-Control/Pragma: они включают CORS preflight, а API его не отдаёт → Failed to fetch.
   const response = await fetch(`${BASE}/GetValue/${CLOUD_APP_KEY}/${key}?t=${stamp}`, {
     cache: "no-store",
-    headers: { "Cache-Control": "no-cache", Pragma: "no-cache" },
   });
   // Пустой ключ у этого API даёт 500 DBNull. Это не «базы нет».
   if (response.status === 404 || response.status === 500) {
@@ -82,7 +82,6 @@ async function cloudSet(key: string, value: string): Promise<void> {
   const response = await fetch(url, {
     method: "POST",
     cache: "no-store",
-    headers: { "Cache-Control": "no-cache", Pragma: "no-cache" },
   });
   if (!response.ok) {
     throw new Error("Не удалось сохранить в общую базу");
@@ -443,7 +442,7 @@ async function acquireCloudLock(owner: string): Promise<boolean> {
 
 async function releaseCloudLock(owner: string): Promise<void> {
   const raw = await cloudGet(LOCK_KEY);
-  if (raw.startsWith(`${owner}|`)) {
+  if (raw && raw.startsWith(`${owner}|`)) {
     await cloudSet(LOCK_KEY, EMPTY_SLOT);
   }
 }
