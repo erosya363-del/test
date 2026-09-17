@@ -10,9 +10,22 @@ export type EventKind =
   | "set";
 
 export type Settings = {
+  /** Режим «Глаз» */
   rewardCorrect: number;
   rewardStreak: number;
   penaltyWrong: number;
+  /** Режим «Слух» */
+  listenRewardCorrect: number;
+  listenRewardStreak: number;
+  listenPenaltyWrong: number;
+  /** Режим «Ударение» */
+  stressRewardCorrect: number;
+  stressRewardStreak: number;
+  stressPenaltyWrong: number;
+  /** Режим «Буквы» */
+  letterRewardCorrect: number;
+  letterRewardStreak: number;
+  letterPenaltyWrong: number;
   hintPrice: number;
   hintPackPrice: number;
   parentPassword: string;
@@ -57,6 +70,15 @@ export const DEFAULT_SETTINGS: Settings = {
   rewardCorrect: 5,
   rewardStreak: 10,
   penaltyWrong: 3,
+  listenRewardCorrect: 7,
+  listenRewardStreak: 12,
+  listenPenaltyWrong: 3,
+  stressRewardCorrect: 5,
+  stressRewardStreak: 10,
+  stressPenaltyWrong: 3,
+  letterRewardCorrect: 5,
+  letterRewardStreak: 10,
+  letterPenaltyWrong: 3,
   hintPrice: 15,
   hintPackPrice: 40,
   parentPassword: "654321",

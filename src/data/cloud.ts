@@ -96,6 +96,15 @@ function encodeMeta(state: SharedState, updatedAt = Date.now()): string {
     `rc=${s.rewardCorrect}`,
     `rs=${s.rewardStreak}`,
     `pw=${s.penaltyWrong}`,
+    `lrc=${s.listenRewardCorrect}`,
+    `lrs=${s.listenRewardStreak}`,
+    `lpw=${s.listenPenaltyWrong}`,
+    `src=${s.stressRewardCorrect}`,
+    `srs=${s.stressRewardStreak}`,
+    `spw=${s.stressPenaltyWrong}`,
+    `brc=${s.letterRewardCorrect}`,
+    `brs=${s.letterRewardStreak}`,
+    `bpw=${s.letterPenaltyWrong}`,
     `hp=${s.hintPrice}`,
     `hpp=${s.hintPackPrice}`,
     `pp=${hexEncode(s.parentPassword || DEFAULT_SETTINGS.parentPassword)}`,
@@ -126,6 +135,15 @@ function decodeMeta(
       rewardCorrect: Number(map.rc ?? DEFAULT_SETTINGS.rewardCorrect),
       rewardStreak: Number(map.rs ?? DEFAULT_SETTINGS.rewardStreak),
       penaltyWrong: Number(map.pw ?? DEFAULT_SETTINGS.penaltyWrong),
+      listenRewardCorrect: Number(map.lrc ?? DEFAULT_SETTINGS.listenRewardCorrect),
+      listenRewardStreak: Number(map.lrs ?? DEFAULT_SETTINGS.listenRewardStreak),
+      listenPenaltyWrong: Number(map.lpw ?? DEFAULT_SETTINGS.listenPenaltyWrong),
+      stressRewardCorrect: Number(map.src ?? DEFAULT_SETTINGS.stressRewardCorrect),
+      stressRewardStreak: Number(map.srs ?? DEFAULT_SETTINGS.stressRewardStreak),
+      stressPenaltyWrong: Number(map.spw ?? DEFAULT_SETTINGS.stressPenaltyWrong),
+      letterRewardCorrect: Number(map.brc ?? DEFAULT_SETTINGS.letterRewardCorrect),
+      letterRewardStreak: Number(map.brs ?? DEFAULT_SETTINGS.letterRewardStreak),
+      letterPenaltyWrong: Number(map.bpw ?? DEFAULT_SETTINGS.letterPenaltyWrong),
       hintPrice: Number(map.hp ?? DEFAULT_SETTINGS.hintPrice),
       hintPackPrice: Number(map.hpp ?? DEFAULT_SETTINGS.hintPackPrice),
       parentPassword: map.pp ? hexDecode(map.pp) : DEFAULT_SETTINGS.parentPassword,
@@ -266,7 +284,24 @@ export function replay(events: GameEvent[], settings = DEFAULT_SETTINGS): Shared
 
   for (const event of sorted) {
     if (event.kind === "set" && event.detail) {
-      const [rc, rs, pw, hp, hpp, passHex] = event.detail.split(",");
+      const p = event.detail.split(",");
+      const [
+        rc,
+        rs,
+        pw,
+        hp,
+        hpp,
+        passHex,
+        lrc,
+        lrs,
+        lpw,
+        src,
+        srs,
+        spw,
+        brc,
+        brs,
+        bpw,
+      ] = p;
       currentSettings = {
         rewardCorrect: Number(rc) || currentSettings.rewardCorrect,
         rewardStreak: Number(rs) || currentSettings.rewardStreak,
@@ -274,6 +309,15 @@ export function replay(events: GameEvent[], settings = DEFAULT_SETTINGS): Shared
         hintPrice: Number(hp) || currentSettings.hintPrice,
         hintPackPrice: Number(hpp) || currentSettings.hintPackPrice,
         parentPassword: passHex ? hexDecode(passHex) : currentSettings.parentPassword,
+        listenRewardCorrect: Number(lrc) || currentSettings.listenRewardCorrect,
+        listenRewardStreak: Number(lrs) || currentSettings.listenRewardStreak,
+        listenPenaltyWrong: Number(lpw) || currentSettings.listenPenaltyWrong,
+        stressRewardCorrect: Number(src) || currentSettings.stressRewardCorrect,
+        stressRewardStreak: Number(srs) || currentSettings.stressRewardStreak,
+        stressPenaltyWrong: Number(spw) || currentSettings.stressPenaltyWrong,
+        letterRewardCorrect: Number(brc) || currentSettings.letterRewardCorrect,
+        letterRewardStreak: Number(brs) || currentSettings.letterRewardStreak,
+        letterPenaltyWrong: Number(bpw) || currentSettings.letterPenaltyWrong,
       };
     }
     money = Math.max(0, money + event.moneyDelta);
@@ -654,7 +698,13 @@ export function readLocalCache(): SharedState | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw) as SharedState;
     if (!parsed || typeof parsed.money !== "number") return null;
-    return parsed;
+    return {
+      ...parsed,
+      settings: { ...DEFAULT_SETTINGS, ...(parsed.settings ?? {}) },
+      hints: typeof parsed.hints === "number" ? parsed.hints : START_HINTS,
+      events: parsed.events ?? [],
+      wordStats: parsed.wordStats ?? {},
+    };
   } catch {
     return null;
   }

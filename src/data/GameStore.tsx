@@ -27,6 +27,9 @@ type AnswerInput = {
   errorType?: string;
   detail?: string;
   streakAfter: number;
+  rewardCorrect?: number;
+  rewardStreak?: number;
+  penaltyWrong?: number;
 };
 
 type GameStoreValue = {
@@ -330,11 +333,10 @@ export function GameStoreProvider({ children }: { children: ReactNode }) {
   const applyAnswer = useCallback(
     async (input: AnswerInput) => {
       const current = stateRef.current;
-      const reward = input.ok
-        ? input.streakAfter >= 2
-          ? current.settings.rewardStreak
-          : current.settings.rewardCorrect
-        : -current.settings.penaltyWrong;
+      const rewardOk = input.rewardCorrect ?? current.settings.rewardCorrect;
+      const rewardStreak = input.rewardStreak ?? current.settings.rewardStreak;
+      const penalty = input.penaltyWrong ?? current.settings.penaltyWrong;
+      const reward = input.ok ? (input.streakAfter >= 2 ? rewardStreak : rewardOk) : -penalty;
       const event: GameEvent = {
         id: newId(),
         ts: Date.now(),
@@ -489,7 +491,23 @@ export function GameStoreProvider({ children }: { children: ReactNode }) {
         ts: Date.now(),
         kind: "set",
         moneyDelta: 0,
-        detail: `${settings.rewardCorrect},${settings.rewardStreak},${settings.penaltyWrong},${settings.hintPrice},${settings.hintPackPrice},${hexEncode(settings.parentPassword)}`,
+        detail: [
+          settings.rewardCorrect,
+          settings.rewardStreak,
+          settings.penaltyWrong,
+          settings.hintPrice,
+          settings.hintPackPrice,
+          hexEncode(settings.parentPassword),
+          settings.listenRewardCorrect,
+          settings.listenRewardStreak,
+          settings.listenPenaltyWrong,
+          settings.stressRewardCorrect,
+          settings.stressRewardStreak,
+          settings.stressPenaltyWrong,
+          settings.letterRewardCorrect,
+          settings.letterRewardStreak,
+          settings.letterPenaltyWrong,
+        ].join(","),
         reason: settings.parentPassword !== current.settings.parentPassword ? "Сменили пароль" : "Изменили премии",
         device: deviceId(),
       };

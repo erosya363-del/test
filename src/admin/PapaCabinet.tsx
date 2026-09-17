@@ -61,6 +61,15 @@ function settingsToDraft(settings: Settings) {
     rewardCorrect: String(settings.rewardCorrect),
     rewardStreak: String(settings.rewardStreak),
     penaltyWrong: String(settings.penaltyWrong),
+    listenRewardCorrect: String(settings.listenRewardCorrect),
+    listenRewardStreak: String(settings.listenRewardStreak),
+    listenPenaltyWrong: String(settings.listenPenaltyWrong),
+    stressRewardCorrect: String(settings.stressRewardCorrect),
+    stressRewardStreak: String(settings.stressRewardStreak),
+    stressPenaltyWrong: String(settings.stressPenaltyWrong),
+    letterRewardCorrect: String(settings.letterRewardCorrect),
+    letterRewardStreak: String(settings.letterRewardStreak),
+    letterPenaltyWrong: String(settings.letterPenaltyWrong),
     hintPrice: String(settings.hintPrice),
     hintPackPrice: String(settings.hintPackPrice),
   };
@@ -71,6 +80,15 @@ function sameRewards(a: Settings, b: Settings) {
     a.rewardCorrect === b.rewardCorrect &&
     a.rewardStreak === b.rewardStreak &&
     a.penaltyWrong === b.penaltyWrong &&
+    a.listenRewardCorrect === b.listenRewardCorrect &&
+    a.listenRewardStreak === b.listenRewardStreak &&
+    a.listenPenaltyWrong === b.listenPenaltyWrong &&
+    a.stressRewardCorrect === b.stressRewardCorrect &&
+    a.stressRewardStreak === b.stressRewardStreak &&
+    a.stressPenaltyWrong === b.stressPenaltyWrong &&
+    a.letterRewardCorrect === b.letterRewardCorrect &&
+    a.letterRewardStreak === b.letterRewardStreak &&
+    a.letterPenaltyWrong === b.letterPenaltyWrong &&
     a.hintPrice === b.hintPrice &&
     a.hintPackPrice === b.hintPackPrice &&
     a.parentPassword === b.parentPassword
@@ -83,6 +101,7 @@ export function PapaCabinet({ onClose }: { onClose: () => void }) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [tab, setTab] = useState<"stat" | "log" | "pay" | "set">("stat");
+  const [rewardTab, setRewardTab] = useState<"eye" | "listen" | "stress" | "letter" | "shop">("eye");
   const [payout, setPayout] = useState("100");
   const [payReason, setPayReason] = useState("Снятие денег для сына");
   const [creditAmount, setCreditAmount] = useState("50");
@@ -178,6 +197,15 @@ export function PapaCabinet({ onClose }: { onClose: () => void }) {
     rewardCorrect: moneyFromDraft(draft.rewardCorrect),
     rewardStreak: moneyFromDraft(draft.rewardStreak),
     penaltyWrong: moneyFromDraft(draft.penaltyWrong),
+    listenRewardCorrect: moneyFromDraft(draft.listenRewardCorrect),
+    listenRewardStreak: moneyFromDraft(draft.listenRewardStreak),
+    listenPenaltyWrong: moneyFromDraft(draft.listenPenaltyWrong),
+    stressRewardCorrect: moneyFromDraft(draft.stressRewardCorrect),
+    stressRewardStreak: moneyFromDraft(draft.stressRewardStreak),
+    stressPenaltyWrong: moneyFromDraft(draft.stressPenaltyWrong),
+    letterRewardCorrect: moneyFromDraft(draft.letterRewardCorrect),
+    letterRewardStreak: moneyFromDraft(draft.letterRewardStreak),
+    letterPenaltyWrong: moneyFromDraft(draft.letterPenaltyWrong),
     hintPrice: moneyFromDraft(draft.hintPrice),
     hintPackPrice: moneyFromDraft(draft.hintPackPrice),
   });
@@ -446,33 +474,64 @@ export function PapaCabinet({ onClose }: { onClose: () => void }) {
         {tab === "set" && (
           <div className="w-full space-y-4">
             <div className="glass-card w-full space-y-4">
-              <p className="font-black text-lg">Премии</p>
-              <p className="text-white/60">Штраф пишите плюсом: 3 значит −3 ₽</p>
-              <MoneyField
-                label="За верный ответ, ₽"
-                value={draft.rewardCorrect}
-                onChange={(value) => patchDraft({ rewardCorrect: value })}
-              />
-              <MoneyField
-                label="За серию 3+, ₽"
-                value={draft.rewardStreak}
-                onChange={(value) => patchDraft({ rewardStreak: value })}
-              />
-              <MoneyField
-                label="Штраф за ошибку, ₽"
-                value={draft.penaltyWrong}
-                onChange={(value) => patchDraft({ penaltyWrong: value })}
-              />
-              <MoneyField
-                label="Цена подсказки, ₽"
-                value={draft.hintPrice}
-                onChange={(value) => patchDraft({ hintPrice: value })}
-              />
-              <MoneyField
-                label="Набор +3, ₽"
-                value={draft.hintPackPrice}
-                onChange={(value) => patchDraft({ hintPackPrice: value })}
-              />
+              <p className="font-black text-lg">Премии по режимам</p>
+              <p className="text-white/60">Штраф плюсом: 3 значит −3 ₽. У каждого режима свои цифры.</p>
+              <div className="papa-tabs">
+                {(
+                  [
+                    ["eye", "👁️ Глаз"],
+                    ["listen", "🔊 Слух"],
+                    ["stress", "🎵 Удар."],
+                    ["letter", "🔤 Буквы"],
+                    ["shop", "🛒 Магаз"],
+                  ] as const
+                ).map(([id, label]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    className={rewardTab === id ? "btn-primary papa-tab" : "btn-secondary papa-tab"}
+                    onClick={() => setRewardTab(id)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              {rewardTab === "eye" && (
+                <>
+                  <MoneyField label="Верно, ₽" value={draft.rewardCorrect} onChange={(value) => patchDraft({ rewardCorrect: value })} />
+                  <MoneyField label="Серия 3+, ₽" value={draft.rewardStreak} onChange={(value) => patchDraft({ rewardStreak: value })} />
+                  <MoneyField label="Штраф, ₽" value={draft.penaltyWrong} onChange={(value) => patchDraft({ penaltyWrong: value })} />
+                </>
+              )}
+              {rewardTab === "listen" && (
+                <>
+                  <MoneyField label="Верно, ₽" value={draft.listenRewardCorrect} onChange={(value) => patchDraft({ listenRewardCorrect: value })} />
+                  <MoneyField label="Серия 3+, ₽" value={draft.listenRewardStreak} onChange={(value) => patchDraft({ listenRewardStreak: value })} />
+                  <MoneyField label="Штраф, ₽" value={draft.listenPenaltyWrong} onChange={(value) => patchDraft({ listenPenaltyWrong: value })} />
+                </>
+              )}
+              {rewardTab === "stress" && (
+                <>
+                  <MoneyField label="Верно, ₽" value={draft.stressRewardCorrect} onChange={(value) => patchDraft({ stressRewardCorrect: value })} />
+                  <MoneyField label="Серия 3+, ₽" value={draft.stressRewardStreak} onChange={(value) => patchDraft({ stressRewardStreak: value })} />
+                  <MoneyField label="Штраф, ₽" value={draft.stressPenaltyWrong} onChange={(value) => patchDraft({ stressPenaltyWrong: value })} />
+                </>
+              )}
+              {rewardTab === "letter" && (
+                <>
+                  <MoneyField label="Верно, ₽" value={draft.letterRewardCorrect} onChange={(value) => patchDraft({ letterRewardCorrect: value })} />
+                  <MoneyField label="Серия 3+, ₽" value={draft.letterRewardStreak} onChange={(value) => patchDraft({ letterRewardStreak: value })} />
+                  <MoneyField label="Штраф, ₽" value={draft.letterPenaltyWrong} onChange={(value) => patchDraft({ letterPenaltyWrong: value })} />
+                </>
+              )}
+              {rewardTab === "shop" && (
+                <>
+                  <MoneyField label="Цена подсказки, ₽" value={draft.hintPrice} onChange={(value) => patchDraft({ hintPrice: value })} />
+                  <MoneyField label="Набор +3, ₽" value={draft.hintPackPrice} onChange={(value) => patchDraft({ hintPackPrice: value })} />
+                </>
+              )}
+
               <button
                 type="button"
                 className="w-full btn-primary play-cta"
@@ -482,16 +541,12 @@ export function PapaCabinet({ onClose }: { onClose: () => void }) {
                   setSettings(next);
                   setDraft(settingsToDraft(next));
                   void runAction(
-                    { title: "Сохраняем…", message: "Премии", tone: "wait", busy: true },
+                    { title: "Сохраняем…", message: "Премии режимов", tone: "wait", busy: true },
                     async () => {
                       await store.saveSettings(next);
                       draftDirtyRef.current = false;
                     },
-                    {
-                      title: "Сохранено",
-                      message: `Верно +${next.rewardCorrect} · серия +${next.rewardStreak}\nШтраф −${next.penaltyWrong}`,
-                      tone: "ok",
-                    },
+                    { title: "Сохранено", message: "Премии на всех телефонах", tone: "ok" },
                   );
                 }}
               >
@@ -506,10 +561,10 @@ export function PapaCabinet({ onClose }: { onClose: () => void }) {
                   draftDirtyRef.current = true;
                   setSettings(next);
                   setDraft(settingsToDraft(next));
-                  showOk("Вернули 5 / 10 / −3", "Нажмите «Сохранить премии»");
+                  showOk("Вернули как было", "Нажмите «Сохранить премии»");
                 }}
               >
-                Вернуть 5 / 10 / −3
+                Вернуть по умолчанию
               </button>
             </div>
             <div className="glass-card w-full space-y-4">

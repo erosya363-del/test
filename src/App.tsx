@@ -1,8 +1,10 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { playCorrectSound, playWrongSound, playCoinSound, playClickSound, playShowSound, resumeAudio } from './sounds';
+import { speakRu, stopSpeaking, canSpeak } from './speech';
 import { PapaCabinet } from './admin/PapaCabinet';
 import { useGameStore } from './data/GameStore';
 import { EXTRA_WORDS } from './data/vocabExtra';
+import { modeRewards, modeTitle, PLAY_MODES, type PlayMode } from './data/modes';
 
 const a = '\u0301'; // combining acute accent
 
@@ -472,7 +474,7 @@ const WORDS: WordData[] = [
   ...EXTRA_WORDS,
 ];
 
-type GameState = 'splash' | 'menu' | 'shop' | 'showing' | 'guessing' | 'fixing' | 'result' | 'final';
+type GameState = 'splash' | 'menu' | 'shop' | 'showing' | 'guessing' | 'fixing' | 'listen' | 'result' | 'final';
 
 interface FixState {
   selectedLetterIndex: number | null;
@@ -486,6 +488,9 @@ function App() {
 
   const [cabinetOpen, setCabinetOpen] = useState(() => window.location.hash === '#papa');
   const [gameState, setGameState] = useState<GameState>('splash');
+  const [playMode, setPlayMode] = useState<PlayMode>('eye');
+  const playModeRef = useRef<PlayMode>('eye');
+  playModeRef.current = playMode;
   const [currentWordIndex, setCurrentWordIndex] = useState(0);
   const [score, setScore] = useState(0);
   const [mistakes, setMistakes] = useState(0);
@@ -501,6 +506,8 @@ function App() {
   const [mistakeWords, setMistakeWords] = useState<number[]>([]);
   const [fixState, setFixState] = useState<FixState | null>(null);
   const [userFixedWord, setUserFixedWord] = useState<string>('');
+  const [listenOptions, setListenOptions] = useState<string[]>([]);
+  const [listenHeard, setListenHeard] = useState(false);
 
   useEffect(() => {
     const onHash = () => setCabinetOpen(window.location.hash === '#papa');
@@ -519,21 +526,46 @@ function App() {
     return () => clearTimeout(timer);
   }, [gameState, ready]);
 
+  const rewards = modeRewards(settings, playMode);
+
   const pickErrorVariant = useCallback((wordIdx: number) => {
     const word = WORDS[wordIdx];
     if (!word) return 0;
-    const errorVariants = word.errors.filter((e) => e.errorType !== 'none');
+    const mode = playModeRef.current;
     const noErrorVariant = word.errors.find((e) => e.errorType === 'none');
-    if (Math.random() < 0.7 && errorVariants.length > 0) {
-      const errVar = errorVariants[Math.floor(Math.random() * errorVariants.length)];
+    let pool = word.errors.filter((e) => e.errorType !== 'none');
+    if (mode === 'stress') pool = pool.filter((e) => e.errorType === 'stress');
+    if (mode === 'letter') pool = pool.filter((e) => e.errorType === 'letter');
+    if (pool.length === 0) {
+      if (noErrorVariant) return word.errors.indexOf(noErrorVariant);
+      return 0;
+    }
+    // В режимах ударение/буквы чаще показываем ошибку
+    const errorChance = mode === 'eye' ? 0.7 : 0.85;
+    if (Math.random() < errorChance) {
+      const errVar = pool[Math.floor(Math.random() * pool.length)];
       return word.errors.indexOf(errVar);
     }
     if (noErrorVariant) return word.errors.indexOf(noErrorVariant);
-    return 0;
+    return word.errors.indexOf(pool[0]);
+  }, []);
+
+  const buildListenOptions = useCallback((word: WordData) => {
+    const opts = new Set<string>();
+    opts.add(word.correct);
+    for (const err of word.errors) {
+      if (err.errorType !== 'none') opts.add(err.wrong);
+    }
+    const list = [...opts];
+    for (let i = list.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [list[i], list[j]] = [list[j], list[i]];
+    }
+    return list.slice(0, 3);
   }, []);
 
   const applyRoundLocally = useCallback(
-    (order: number[], pos: number, resetScore: boolean) => {
+    (order: number[], pos: number, resetScore: boolean, mode: PlayMode = playModeRef.current) => {
       setWordsOrder(order);
       setCurrentWordIndex(pos);
       if (resetScore) {
@@ -544,13 +576,17 @@ function App() {
         setTotalEarned(0);
         setMistakeWords([]);
       }
+      const word = WORDS[order[pos] ?? 0];
       setCurrentErrorVariant(pickErrorVariant(order[pos] ?? 0));
+      setListenOptions(word ? buildListenOptions(word) : []);
+      setListenHeard(false);
       setShowHint(false);
       setFeedback(null);
       setFixState(null);
       setUserFixedWord('');
+      void mode;
     },
-    [pickErrorVariant],
+    [pickErrorVariant, buildListenOptions],
   );
 
   // Второй телефон подтягивает общую позицию/колоду во время игры.
@@ -560,6 +596,7 @@ function App() {
       gameState === 'showing' ||
       gameState === 'guessing' ||
       gameState === 'fixing' ||
+      gameState === 'listen' ||
       gameState === 'result';
     if (!playing) return;
     if (deck.pos >= deck.ids.length) {
@@ -571,37 +608,47 @@ function App() {
     const sameOrder =
       wordsOrder.length === deck.ids.length && wordsOrder.every((id, i) => id === deck.ids[i]);
     if (sameOrder && currentWordIndex === deck.pos) return;
-    // Не откатываем локальный ход назад, если облако ещё старое.
     if (sameOrder && currentWordIndex > deck.pos) return;
+    const word = WORDS[deck.ids[deck.pos] ?? 0];
     setWordsOrder(deck.ids);
     setCurrentWordIndex(deck.pos);
     setCurrentErrorVariant(pickErrorVariant(deck.ids[deck.pos] ?? 0));
+    setListenOptions(word ? buildListenOptions(word) : []);
+    setListenHeard(false);
     setShowHint(false);
     setFeedback(null);
     setFixState(null);
     setUserFixedWord('');
-    if (gameState === 'result' || gameState === 'fixing' || gameState === 'guessing') {
-      setGameState('showing');
+    if (gameState === 'result' || gameState === 'fixing' || gameState === 'guessing' || gameState === 'listen') {
+      setGameState(playModeRef.current === 'listen' ? 'listen' : 'showing');
     }
-  }, [deck, gameState, wordsOrder, currentWordIndex, pickErrorVariant]);
+  }, [deck, gameState, wordsOrder, currentWordIndex, pickErrorVariant, buildListenOptions]);
 
-  const startGame = async () => {
+  const startGame = async (mode: PlayMode) => {
     resumeAudio();
+    stopSpeaking();
+    setPlayMode(mode);
+    playModeRef.current = mode;
     try {
       const round = await store.ensureRound(WORDS.length);
-      applyRoundLocally(round.ids, round.pos, true);
-      setGameState('showing');
+      applyRoundLocally(round.ids, round.pos, true, mode);
+      setGameState(mode === 'listen' ? 'listen' : 'showing');
       playShowSound();
     } catch {
-      // Без облака — локальный раунд, чтобы игра не вставала.
       const order = [...Array(WORDS.length).keys()]
         .sort(() => Math.random() - 0.5)
         .slice(0, Math.min(50, WORDS.length));
-      applyRoundLocally(order, 0, true);
-      setGameState('showing');
+      applyRoundLocally(order, 0, true, mode);
+      setGameState(mode === 'listen' ? 'listen' : 'showing');
       playShowSound();
     }
   };
+
+  const answerExtras = () => ({
+    rewardCorrect: rewards.correct,
+    rewardStreak: rewards.streak,
+    penaltyWrong: rewards.penalty,
+  });
 
   const goToGuessing = () => {
     playClickSound();
@@ -618,16 +665,14 @@ function App() {
     if (errorData.errorType === 'none') {
       // Ошибки нет, а он сказал что есть
       setFeedback('wrong');
-      void store.applyAnswer({
-        ok: false,
+      void store.applyAnswer({ok: false,
         word: word.correctPlain,
         shown: errorData.wrong,
         expected: word.correct,
         choice: 'Сказал, что есть ошибка',
         errorType: 'none',
         detail: 'Ошибки не было',
-        streakAfter: 0,
-      });
+        streakAfter: 0, ...answerExtras() });
       setMistakes(prev => prev + 1);
       setStreak(0);
       playWrongSound();
@@ -649,17 +694,15 @@ function App() {
       // Верно!
       setFeedback('correct');
       const newStreak = streak + 1;
-      const reward = newStreak >= 2 ? settings.rewardStreak : settings.rewardCorrect;
-      void store.applyAnswer({
-        ok: true,
+      const reward = newStreak >= 2 ? rewards.streak : rewards.correct;
+      void store.applyAnswer({ok: true,
         word: word.correctPlain,
         shown: errorData.wrong,
         expected: word.correct,
         choice: 'Сказал, что всё верно',
         errorType: 'none',
         detail: 'Ошибки не было — правильно',
-        streakAfter: newStreak,
-      });
+        streakAfter: newStreak, ...answerExtras() });
       setTotalEarned(prev => prev + reward);
       setScore(prev => prev + 1);
       setStreak(newStreak);
@@ -673,16 +716,14 @@ function App() {
     } else {
       // Ошибка была, а он сказал что всё верно
       setFeedback('wrong');
-      void store.applyAnswer({
-        ok: false,
+      void store.applyAnswer({ok: false,
         word: word.correctPlain,
         shown: errorData.wrong,
         expected: word.correct,
         choice: 'Сказал, что всё верно',
         errorType: errorData.errorType,
         detail: 'Ошибка была, пропустил',
-        streakAfter: 0,
-      });
+        streakAfter: 0, ...answerExtras() });
       setMistakes(prev => prev + 1);
       setStreak(0);
       setMistakeWords(prev => {
@@ -755,7 +796,7 @@ function App() {
       // Правильно!
       setFeedback('correct');
       const newStreak = streak + 1;
-      const reward = newStreak >= 2 ? settings.rewardStreak : settings.rewardCorrect;
+      const reward = newStreak >= 2 ? rewards.streak : rewards.correct;
       void store.applyAnswer({
         ok: true,
         word: word.correctPlain,
@@ -812,6 +853,7 @@ function App() {
 
   const nextWord = () => {
     playClickSound();
+    stopSpeaking();
     if (currentWordIndex + 1 >= wordsOrder.length) {
       void store.advanceRound(wordsOrder.length, wordsOrder);
       setGameState('final');
@@ -826,13 +868,16 @@ function App() {
         setWordsOrder(updatedOrder);
       }
       
+      const word = WORDS[updatedOrder[nextIndex] ?? 0];
       setCurrentWordIndex(nextIndex);
       setCurrentErrorVariant(pickErrorVariant(updatedOrder[nextIndex] ?? 0));
+      setListenOptions(word ? buildListenOptions(word) : []);
+      setListenHeard(false);
       setShowHint(false);
       setFeedback(null);
       setFixState(null);
       setUserFixedWord('');
-      setGameState('showing');
+      setGameState(playModeRef.current === 'listen' ? 'listen' : 'showing');
       playShowSound();
       void store.advanceRound(nextIndex, updatedOrder);
     }
@@ -840,7 +885,64 @@ function App() {
 
   const goBack = () => {
     playClickSound();
+    stopSpeaking();
     setGameState('menu');
+  };
+
+  const playListenWord = async () => {
+    if (!currentWord) return;
+    resumeAudio();
+    playClickSound();
+    setListenHeard(true);
+    await speakRu(currentWord.correctPlain);
+  };
+
+  const handleListenChoice = (choice: string) => {
+    if (!currentWord) return;
+    playClickSound();
+    const ok = choice === currentWord.correct;
+    if (ok) {
+      setFeedback('correct');
+      const newStreak = streak + 1;
+      const reward = newStreak >= 2 ? rewards.streak : rewards.correct;
+      void store.applyAnswer({
+        ok: true,
+        word: currentWord.correctPlain,
+        shown: choice,
+        expected: currentWord.correct,
+        choice: `Выбрал «${choice}»`,
+        errorType: 'listen',
+        detail: `Режим слух · ${modeTitle('listen')}`,
+        streakAfter: newStreak,
+        ...answerExtras(),
+      });
+      setTotalEarned((prev) => prev + reward);
+      setScore((prev) => prev + 1);
+      setStreak(newStreak);
+      if (newStreak > bestStreak) setBestStreak(newStreak);
+      setShowConfetti(true);
+      setShowMoneyAnim({ amount: reward, key: Date.now() });
+      playCorrectSound();
+      setTimeout(() => { setShowConfetti(false); playCoinSound(); }, 1200);
+      setTimeout(() => setShowMoneyAnim(null), 2000);
+    } else {
+      setFeedback('wrong');
+      void store.applyAnswer({
+        ok: false,
+        word: currentWord.correctPlain,
+        shown: choice,
+        expected: currentWord.correct,
+        choice: `Выбрал «${choice}»`,
+        errorType: 'listen',
+        detail: `Режим слух · неверно`,
+        streakAfter: 0,
+        ...answerExtras(),
+      });
+      setMistakes((prev) => prev + 1);
+      setStreak(0);
+      playWrongSound();
+    }
+    setGameState('result');
   };
 
   const buyHint = () => {
@@ -858,7 +960,11 @@ function App() {
   };
 
   const currentWord = wordsOrder.length > 0 && wordsOrder[currentWordIndex] !== undefined ? WORDS[wordsOrder[currentWordIndex]] : null;
-  const displayedWord = currentWord ? (gameState === 'showing' ? currentWord.correct : currentWord.errors[currentErrorVariant].wrong) : '';
+  const displayedWord = currentWord
+    ? gameState === 'showing' || (gameState === 'result' && playMode === 'listen')
+      ? currentWord.correct
+      : (currentWord.errors[currentErrorVariant]?.wrong ?? currentWord.correct)
+    : '';
   const currentError = currentWord ? currentWord.errors[currentErrorVariant] : null;
   const progress = wordsOrder.length > 0 ? ((currentWordIndex) / wordsOrder.length) * 100 : 0;
 
@@ -971,9 +1077,9 @@ function App() {
       {/* ============ MENU ============ */}
       {gameState === 'menu' && (
         <div className="app-screen relative">
-          <div className="text-center mb-6 animate-fade-in-up">
-            <div className="relative inline-block mb-4">
-              <div className="text-7xl md:text-8xl animate-float">📝</div>
+          <div className="text-center mb-4 animate-fade-in-up">
+            <div className="relative inline-block mb-3">
+              <div className="text-7xl animate-float">📝</div>
               <div className="absolute -top-2 -right-4 text-2xl animate-spin-slow">✨</div>
             </div>
             <h1 className="text-4xl font-black mb-2">
@@ -981,19 +1087,13 @@ function App() {
                 Диктант Квест
               </span>
             </h1>
-            <p className="text-base md:text-lg text-purple-200/80 font-medium">
+            <p className="text-base text-purple-200/80 font-medium">
               1 класс • {WORDS.length} слов
             </p>
           </div>
 
-          <div className="glass-card max-w-sm w-full animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
-            <div className="space-y-2 mb-4">
-              <RuleRow emoji="✅" bg="from-green-500/20 to-emerald-500/20" border="border-green-400/30" text="Правильно" reward={`+${settings.rewardCorrect} ₽`} textColor="text-green-200" rewardColor="text-green-300" />
-              <RuleRow emoji="🔥" bg="from-orange-500/20 to-red-500/20" border="border-orange-400/30" text="Серия 3+" reward={`+${settings.rewardStreak} ₽`} textColor="text-orange-200" rewardColor="text-orange-300" />
-              <RuleRow emoji="❌" bg="from-red-500/20 to-pink-500/20" border="border-red-400/30" text="Ошибка" reward={`-${settings.penaltyWrong} ₽`} textColor="text-red-200" rewardColor="text-red-300" />
-            </div>
-
-            <div className="bg-white/5 rounded-2xl p-3 mb-4 border border-white/10">
+          <div className="glass-card w-full animate-fade-in-up" style={{ animationDelay: '0.15s' }}>
+            <div className="bg-white/5 rounded-2xl p-3 mb-3 border border-white/10">
               <div className="flex justify-between items-center">
                 <div>
                   <p className="text-xs text-white/50">Баланс</p>
@@ -1006,13 +1106,41 @@ function App() {
                 </div>
               </div>
               <p className="text-[11px] text-white/40 mt-2 text-center">
-                {syncing ? "Сохраняем в общую базу…" : "Один баланс на все телефоны и ярлыки"}
+                {syncing ? "Сохраняем…" : "Один баланс · телефон как приложение"}
               </p>
             </div>
 
-            <button onClick={startGame} disabled={!ready} className="w-full btn-primary text-base py-3.5 mb-2 disabled:opacity-50">
-              🚀 Начать!
-            </button>
+            <p className="field-label mb-2">Выбери режим</p>
+            <div className="space-y-2 mb-3">
+              {PLAY_MODES.map((mode) => {
+                const r = modeRewards(settings, mode.id);
+                return (
+                  <button
+                    key={mode.id}
+                    type="button"
+                    disabled={!ready || (mode.id === 'listen' && !canSpeak())}
+                    onClick={() => void startGame(mode.id)}
+                    className="w-full text-left bg-white/5 border border-white/10 rounded-2xl p-3 active:scale-[0.98] transition disabled:opacity-40"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="text-2xl">{mode.emoji}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-black text-base">{mode.title}</p>
+                        <p className="text-white/55 text-sm">{mode.desc}</p>
+                        <p className="text-yellow-300/80 text-xs mt-1 tabular-nums">
+                          +{r.correct} / +{r.streak} / −{r.penalty} ₽
+                        </p>
+                      </div>
+                      <span className="text-white/40 text-lg">→</span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+            {canSpeak() ? null : (
+              <p className="text-orange-300 text-xs text-center mb-2">Слух недоступен в этом браузере</p>
+            )}
+
             <button onClick={() => { resumeAudio(); playClickSound(); setGameState('shop'); }} className="w-full btn-secondary text-sm py-2.5 mb-2">
               🛒 Магазин
             </button>
@@ -1049,7 +1177,7 @@ function App() {
           <div className="play-stage">
             <div className="play-badge bg-yellow-500/15 border-yellow-400/30 text-yellow-100">
               <span>📖</span>
-              <span>Запомни слово!</span>
+              <span>{modeTitle(playMode)} · запомни</span>
             </div>
             <div className="play-hero">
               <div className="play-emoji animate-float">{currentWord.emoji}</div>
@@ -1060,6 +1188,42 @@ function App() {
             <button onClick={goToGuessing} className="play-cta btn-primary">
               Далее →
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ============ LISTEN ============ */}
+      {gameState === 'listen' && currentWord && (
+        <div className="app-screen app-screen-hud">
+          <div className="play-stage">
+            <div className="play-badge bg-cyan-500/15 border-cyan-400/30 text-cyan-100">
+              <span>🔊</span>
+              <span>Слушай и выбери</span>
+            </div>
+            <div className="play-hero">
+              <div className="play-emoji animate-float">{currentWord.emoji}</div>
+              <button type="button" onClick={() => void playListenWord()} className="play-cta btn-primary">
+                {listenHeard ? '🔊 Ещё раз' : '🔊 Слушать слово'}
+              </button>
+              <p className="play-tip">
+                {listenHeard ? 'Какое написание верное?' : 'Нажми и послушай'}
+              </p>
+            </div>
+            <div className="play-actions">
+              <div className="play-choice-row">
+                {listenOptions.map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    disabled={!listenHeard}
+                    onClick={() => handleListenChoice(option)}
+                    className="btn-secondary play-choice disabled:opacity-40"
+                  >
+                    <span className="play-word text-2xl">{option}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -1194,7 +1358,7 @@ function App() {
                   )}
                 </div>
                 <div className="play-money text-yellow-300">
-                  +{streak >= 2 ? settings.rewardStreak : settings.rewardCorrect} ₽ 💰
+                  +{streak >= 2 ? rewards.streak : rewards.correct} ₽ 💰
                   {streak >= 2 && <span className="text-orange-400 ml-2">🔥</span>}
                 </div>
               </div>
@@ -1211,7 +1375,7 @@ function App() {
                     </div>
                   )}
                 </div>
-                <div className="play-money text-red-300">-{settings.penaltyWrong} ₽ 💸</div>
+                <div className="play-money text-red-300">-{rewards.penalty} ₽ 💸</div>
               </div>
             )}
             <button onClick={nextWord} className="play-cta btn-primary">
@@ -1253,7 +1417,7 @@ function App() {
             </div>
 
             <div className="flex gap-2">
-              <button onClick={startGame} className="flex-1 btn-primary py-2.5 text-sm">🔄 Ещё</button>
+              <button onClick={() => void startGame(playMode)} className="flex-1 btn-primary py-2.5 text-sm">🔄 Ещё</button>
               <button onClick={() => { playClickSound(); setGameState('menu'); }} className="flex-1 btn-secondary py-2.5 text-sm">🏠 Меню</button>
             </div>
           </div>
