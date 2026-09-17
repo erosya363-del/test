@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useGameStore } from "../data/GameStore";
 import { DEFAULT_SETTINGS, type Settings } from "../data/types";
 
@@ -31,6 +31,8 @@ function kindLabel(kind: string) {
       return "🛒 Магазин";
     case "pay":
       return "💸 Снятие";
+    case "add":
+      return "🎁 Начисление";
     case "rst":
       return "🔄 Сброс";
     case "seed":
@@ -42,7 +44,7 @@ function kindLabel(kind: string) {
   }
 }
 
-/** Только цифры, без ведущих нулей: «02» → «2». */
+/** Только цифры. Пустое поле остаётся пустым, пока печатают. */
 function digitsOnly(raw: string): string {
   const digits = raw.replace(/\D/g, "");
   if (!digits) return "";
@@ -64,6 +66,17 @@ function settingsToDraft(settings: Settings) {
   };
 }
 
+function sameRewards(a: Settings, b: Settings) {
+  return (
+    a.rewardCorrect === b.rewardCorrect &&
+    a.rewardStreak === b.rewardStreak &&
+    a.penaltyWrong === b.penaltyWrong &&
+    a.hintPrice === b.hintPrice &&
+    a.hintPackPrice === b.hintPackPrice &&
+    a.parentPassword === b.parentPassword
+  );
+}
+
 export function PapaCabinet({ onClose }: { onClose: () => void }) {
   const store = useGameStore();
   const [authed, setAuthed] = useState(() => sessionStorage.getItem("dictation_papa") === "1");
@@ -71,17 +84,23 @@ export function PapaCabinet({ onClose }: { onClose: () => void }) {
   const [error, setError] = useState("");
   const [tab, setTab] = useState<"stat" | "log" | "pay" | "set">("stat");
   const [payout, setPayout] = useState("100");
-  const [reason, setReason] = useState("Снятие денег для сына");
+  const [payReason, setPayReason] = useState("Снятие денег для сына");
+  const [creditAmount, setCreditAmount] = useState("50");
+  const [creditReason, setCreditReason] = useState("За заслугу");
   const [settings, setSettings] = useState<Settings>(store.settings);
   const [draft, setDraft] = useState(() => settingsToDraft(store.settings));
   const [newPass, setNewPass] = useState("");
   const [newPass2, setNewPass2] = useState("");
   const [notice, setNotice] = useState<Notice | null>(null);
   const [busy, setBusy] = useState(false);
+  /** Пока папа правит премии — облачный refresh не затирает поле обратно. */
+  const draftDirtyRef = useRef(false);
 
   useEffect(() => {
-    setSettings(store.settings);
-    setDraft(settingsToDraft(store.settings));
+    setSettings((prev) => (sameRewards(prev, store.settings) ? prev : store.settings));
+    if (!draftDirtyRef.current) {
+      setDraft(settingsToDraft(store.settings));
+    }
   }, [store.settings]);
 
   useEffect(() => {
@@ -96,7 +115,7 @@ export function PapaCabinet({ onClose }: { onClose: () => void }) {
 
   useEffect(() => {
     if (!notice || notice.busy || notice.tone === "bad") return;
-    const timer = window.setTimeout(() => setNotice(null), 2200);
+    const timer = window.setTimeout(() => setNotice(null), 1800);
     return () => window.clearTimeout(timer);
   }, [notice]);
 
@@ -104,6 +123,7 @@ export function PapaCabinet({ onClose }: { onClose: () => void }) {
     const earned = store.events.filter((event) => event.kind === "ok").reduce((sum, event) => sum + event.moneyDelta, 0);
     const penalties = store.events.filter((event) => event.kind === "bad").reduce((sum, event) => sum + event.moneyDelta, 0);
     const shop = store.events.filter((event) => event.kind === "shop").reduce((sum, event) => sum + event.moneyDelta, 0);
+    const gifted = store.events.filter((event) => event.kind === "add").reduce((sum, event) => sum + event.moneyDelta, 0);
     const withdrawn = store.events
       .filter((event) => event.kind === "pay" || event.kind === "rst")
       .reduce((sum, event) => sum + event.moneyDelta, 0);
@@ -112,7 +132,7 @@ export function PapaCabinet({ onClose }: { onClose: () => void }) {
       .filter((row) => row.seen >= 2 && row.bad / row.seen >= 0.5)
       .sort((a, b) => b.bad / b.seen - a.bad / a.seen || b.bad - a.bad);
     const worst = Object.values(store.wordStats).sort((a, b) => b.bad - a.bad || b.seen - a.seen);
-    return { earned, penalties, shop, withdrawn, answers, hard, worst };
+    return { earned, penalties, shop, gifted, withdrawn, answers, hard, worst };
   }, [store.events, store.wordStats]);
 
   const login = (event: FormEvent) => {
@@ -140,12 +160,17 @@ export function PapaCabinet({ onClose }: { onClose: () => void }) {
     setNotice({ ...waiting, busy: true, tone: "wait" });
     try {
       await action();
-      setNotice({ ...done, tone: "ok" });
+      setNotice({ ...done, tone: "ok", busy: false });
     } catch {
       showBad("Не вышло", "Проверьте интернет и попробуйте ещё раз");
     } finally {
       setBusy(false);
     }
+  };
+
+  const patchDraft = (patch: Partial<ReturnType<typeof settingsToDraft>>) => {
+    draftDirtyRef.current = true;
+    setDraft((prev) => ({ ...prev, ...patch }));
   };
 
   const draftToSettings = (): Settings => ({
@@ -236,6 +261,7 @@ export function PapaCabinet({ onClose }: { onClose: () => void }) {
               <RuleMini label="Верных" value={String(report.answers.filter((event) => event.kind === "ok").length)} />
               <RuleMini label="Ошибок" value={String(report.answers.filter((event) => event.kind === "bad").length)} />
               <RuleMini label="Штрафы" value={`${report.penalties} ₽`} />
+              <RuleMini label="Начислили" value={`+${report.gifted} ₽`} />
               <RuleMini label="Магазин" value={`${Math.abs(report.shop)} ₽`} />
             </div>
             <div className="glass-card w-full">
@@ -306,7 +332,50 @@ export function PapaCabinet({ onClose }: { onClose: () => void }) {
         {tab === "pay" && (
           <div className="w-full space-y-4">
             <div className="glass-card w-full space-y-3">
-              <p className="font-black text-lg">Снятие денег для сына</p>
+              <p className="font-black text-lg">🎁 Начислить деньги</p>
+              <p className="text-white/60 text-sm">За заслугу, подарок, помощь по дому</p>
+              <label className="block">
+                <span className="field-label">Сколько начислить, ₽</span>
+                <input
+                  className="game-input"
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  autoComplete="off"
+                  value={creditAmount}
+                  onChange={(event) => setCreditAmount(digitsOnly(event.target.value))}
+                  onBlur={() => setCreditAmount((prev) => digitsOnly(prev) || "0")}
+                />
+              </label>
+              <label className="block">
+                <span className="field-label">За что</span>
+                <input className="game-input" value={creditReason} onChange={(event) => setCreditReason(event.target.value)} />
+              </label>
+              <button
+                type="button"
+                className="w-full btn-primary play-cta"
+                disabled={busy}
+                onClick={() => {
+                  const amount = moneyFromDraft(creditAmount);
+                  if (amount <= 0) {
+                    showBad("Укажите сумму", "Сколько начислить?");
+                    return;
+                  }
+                  void runAction(
+                    { title: "Начисляем…", message: `+${amount} ₽`, tone: "wait", busy: true },
+                    async () => {
+                      await store.credit(amount, creditReason);
+                    },
+                    { title: "Начислено", message: `+${amount} ₽`, tone: "ok" },
+                  );
+                }}
+              >
+                Начислить
+              </button>
+            </div>
+
+            <div className="glass-card w-full space-y-3">
+              <p className="font-black text-lg">💸 Снять деньги</p>
               <label className="block">
                 <span className="field-label">Сколько снять, ₽</span>
                 <input
@@ -322,7 +391,7 @@ export function PapaCabinet({ onClose }: { onClose: () => void }) {
               </label>
               <label className="block">
                 <span className="field-label">За что</span>
-                <input className="game-input" value={reason} onChange={(event) => setReason(event.target.value)} />
+                <input className="game-input" value={payReason} onChange={(event) => setPayReason(event.target.value)} />
               </label>
               <button
                 type="button"
@@ -341,7 +410,7 @@ export function PapaCabinet({ onClose }: { onClose: () => void }) {
                   void runAction(
                     { title: "Снимаем…", message: `${amount} ₽`, tone: "wait", busy: true },
                     async () => {
-                      await store.payout(amount, reason);
+                      await store.payout(amount, payReason);
                     },
                     { title: "Перевод готов", message: `Сняли ${amount} ₽`, tone: "ok" },
                   );
@@ -350,6 +419,7 @@ export function PapaCabinet({ onClose }: { onClose: () => void }) {
                 Снять с баланса
               </button>
             </div>
+
             <div className="glass-card w-full space-y-3">
               <p className="font-black text-lg">Сброс</p>
               <p className="text-white/60">Обнуляет деньги и ставит 3 подсказки. Журнал остаётся.</p>
@@ -381,27 +451,27 @@ export function PapaCabinet({ onClose }: { onClose: () => void }) {
               <MoneyField
                 label="За верный ответ, ₽"
                 value={draft.rewardCorrect}
-                onChange={(value) => setDraft((prev) => ({ ...prev, rewardCorrect: value }))}
+                onChange={(value) => patchDraft({ rewardCorrect: value })}
               />
               <MoneyField
                 label="За серию 3+, ₽"
                 value={draft.rewardStreak}
-                onChange={(value) => setDraft((prev) => ({ ...prev, rewardStreak: value }))}
+                onChange={(value) => patchDraft({ rewardStreak: value })}
               />
               <MoneyField
                 label="Штраф за ошибку, ₽"
                 value={draft.penaltyWrong}
-                onChange={(value) => setDraft((prev) => ({ ...prev, penaltyWrong: value }))}
+                onChange={(value) => patchDraft({ penaltyWrong: value })}
               />
               <MoneyField
                 label="Цена подсказки, ₽"
                 value={draft.hintPrice}
-                onChange={(value) => setDraft((prev) => ({ ...prev, hintPrice: value }))}
+                onChange={(value) => patchDraft({ hintPrice: value })}
               />
               <MoneyField
                 label="Набор +3, ₽"
                 value={draft.hintPackPrice}
-                onChange={(value) => setDraft((prev) => ({ ...prev, hintPackPrice: value }))}
+                onChange={(value) => patchDraft({ hintPackPrice: value })}
               />
               <button
                 type="button"
@@ -412,9 +482,10 @@ export function PapaCabinet({ onClose }: { onClose: () => void }) {
                   setSettings(next);
                   setDraft(settingsToDraft(next));
                   void runAction(
-                    { title: "Сохраняем…", message: "Премии на все телефоны", tone: "wait", busy: true },
+                    { title: "Сохраняем…", message: "Премии", tone: "wait", busy: true },
                     async () => {
                       await store.saveSettings(next);
+                      draftDirtyRef.current = false;
                     },
                     {
                       title: "Сохранено",
@@ -432,9 +503,10 @@ export function PapaCabinet({ onClose }: { onClose: () => void }) {
                 disabled={busy}
                 onClick={() => {
                   const next = { ...DEFAULT_SETTINGS, parentPassword: settings.parentPassword };
+                  draftDirtyRef.current = true;
                   setSettings(next);
                   setDraft(settingsToDraft(next));
-                  showOk("Вернули как было", "5 / 10 / −3 — нажмите «Сохранить премии»");
+                  showOk("Вернули 5 / 10 / −3", "Нажмите «Сохранить премии»");
                 }}
               >
                 Вернуть 5 / 10 / −3
@@ -442,7 +514,7 @@ export function PapaCabinet({ onClose }: { onClose: () => void }) {
             </div>
             <div className="glass-card w-full space-y-4">
               <p className="font-black text-lg">Сменить пароль</p>
-              <p className="text-white/60">Пароль один на все телефоны. Сейчас сын без него сюда не зайдёт.</p>
+              <p className="text-white/60">Пароль один на все телефоны.</p>
               <label className="block">
                 <span className="field-label">Новый пароль</span>
                 <input className="game-input" type="password" inputMode="numeric" autoComplete="off" placeholder="Новый пароль" value={newPass} onChange={(event) => setNewPass(event.target.value)} />
@@ -468,6 +540,7 @@ export function PapaCabinet({ onClose }: { onClose: () => void }) {
                       await store.saveSettings(next);
                       setNewPass("");
                       setNewPass2("");
+                      draftDirtyRef.current = false;
                     },
                     { title: "Пароль изменён", message: "Уже на всех телефонах", tone: "ok" },
                   );
@@ -517,7 +590,10 @@ function MoneyField({
         enterKeyHint="done"
         value={value}
         onChange={(event) => onChange(digitsOnly(event.target.value))}
-        onBlur={() => onChange(digitsOnly(value) || "0")}
+        onBlur={() => {
+          if (value === "") onChange("0");
+          else onChange(digitsOnly(value));
+        }}
       />
     </label>
   );
@@ -535,7 +611,7 @@ function NoticeSheet({ notice, onOk }: { notice: Notice; onOk: () => void }) {
         </p>
         {notice.message && <p className="ios-notice-message">{notice.message}</p>}
         {!notice.busy && (
-          <button type="button" className="ios-notice-ok btn-primary" onClick={onOk}>
+          <button type="button" className="ios-notice-ok" onClick={onOk}>
             OK
           </button>
         )}

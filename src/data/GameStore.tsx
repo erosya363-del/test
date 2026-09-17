@@ -48,6 +48,8 @@ type GameStoreValue = {
   applyHint: () => Promise<void>;
   applyShop: (pack: boolean) => Promise<void>;
   payout: (amount: number, reason: string) => Promise<void>;
+  /** Начислить деньги сыну (заслуга и т.п.). */
+  credit: (amount: number, reason: string) => Promise<void>;
   resetProgress: (reason: string) => Promise<void>;
   saveSettings: (settings: Settings) => Promise<void>;
 };
@@ -430,6 +432,27 @@ export function GameStoreProvider({ children }: { children: ReactNode }) {
     [persistEvent],
   );
 
+  const credit = useCallback(
+    async (amount: number, reason: string) => {
+      const add = Math.max(0, Math.round(amount));
+      if (add <= 0) return;
+      const event: GameEvent = {
+        id: newId(),
+        ts: Date.now(),
+        kind: "add",
+        moneyDelta: add,
+        reason: reason || "Начисление за заслугу",
+        device: deviceId(),
+      };
+      await persistEvent(event, (now) => ({
+        ...now,
+        money: now.money + add,
+        events: [...now.events, event],
+      }));
+    },
+    [persistEvent],
+  );
+
   const resetProgress = useCallback(
     async (reason: string) => {
       const current = stateRef.current;
@@ -496,6 +519,7 @@ export function GameStoreProvider({ children }: { children: ReactNode }) {
       applyHint,
       applyShop,
       payout,
+      credit,
       resetProgress,
       saveSettings,
     }),
@@ -504,6 +528,7 @@ export function GameStoreProvider({ children }: { children: ReactNode }) {
       applyAnswer,
       applyHint,
       applyShop,
+      credit,
       deck,
       ensureRound,
       payout,

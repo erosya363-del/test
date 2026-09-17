@@ -816,11 +816,11 @@ select {
   font-weight: 700;
 }
 
-/* ===== iOS-style notice (кабинет) ===== */
+/* ===== Compact notice (кабинет) — не больше телефона ===== */
 
 @keyframes ios-notice-in {
-  0% { opacity: 0; transform: scale(0.86) translateY(18px); }
-  100% { opacity: 1; transform: scale(1) translateY(0); }
+  0% { opacity: 0; transform: translateY(10px) scale(0.96); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 @keyframes ios-dim-in {
@@ -839,9 +839,9 @@ select {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 1.25rem;
-  padding-top: calc(1.25rem + env(safe-area-inset-top, 0px));
-  padding-bottom: calc(1.25rem + env(safe-area-inset-bottom, 0px));
+  padding: 1rem;
+  padding-top: calc(1rem + env(safe-area-inset-top, 0px));
+  padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
   pointer-events: auto;
 }
 
@@ -851,31 +851,31 @@ select {
   border: 0;
   padding: 0;
   margin: 0;
-  background: rgba(8, 6, 24, 0.62);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  animation: ios-dim-in 0.22s ease-out both;
+  background: rgba(8, 6, 24, 0.45);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  animation: ios-dim-in 0.18s ease-out both;
 }
 
 .ios-notice-card {
   position: relative;
   z-index: 1;
-  width: min(100%, 20.5rem);
-  border-radius: 22px;
-  padding: 1.35rem 1.2rem 1.1rem;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 17.5rem;
+  border-radius: 18px;
+  padding: 1rem 1rem 0.85rem;
   text-align: center;
-  background: rgba(36, 32, 72, 0.96);
+  background: rgba(36, 32, 72, 0.98);
   border: 1px solid rgba(255, 255, 255, 0.16);
-  box-shadow:
-    0 18px 50px rgba(0, 0, 0, 0.45),
-    inset 0 1px 0 rgba(255, 255, 255, 0.12);
-  animation: ios-notice-in 0.34s cubic-bezier(0.22, 1.2, 0.36, 1) both;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+  animation: ios-notice-in 0.22s ease-out both;
 }
 
 .ios-notice-emoji {
-  font-size: 2.1rem;
+  font-size: 1.55rem;
   line-height: 1;
-  margin-bottom: 0.55rem;
+  margin-bottom: 0.4rem;
 }
 
 .ios-notice-spin {
@@ -884,26 +884,39 @@ select {
 }
 
 .ios-notice-title {
-  font-size: 1.2rem;
-  font-weight: 900;
+  font-size: 1.05rem;
+  font-weight: 800;
   color: #fff;
-  margin: 0 0 0.35rem;
+  margin: 0 0 0.25rem;
 }
 
 .ios-notice-message {
   margin: 0;
   white-space: pre-line;
   color: rgba(255, 255, 255, 0.68);
-  font-size: 0.95rem;
+  font-size: 0.88rem;
   font-weight: 600;
   line-height: 1.35;
 }
 
 .ios-notice-ok {
+  display: block;
   width: 100%;
-  margin-top: 1rem;
-  padding: 0.85rem 1rem;
-  font-size: 1.05rem;
+  margin-top: 0.85rem;
+  padding: 0.65rem 0.85rem;
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: #fff;
+  border: 0;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  box-shadow: 0 3px 12px rgba(16, 185, 129, 0.35);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.ios-notice-ok:active {
+  transform: scale(0.98);
 }
 
 .ios-notice-card.ios-notice-wait .ios-notice-title {

@@ -5,6 +5,7 @@ export type EventKind =
   | "hint"
   | "shop"
   | "pay"
+  | "add"
   | "rst"
   | "set";
 
