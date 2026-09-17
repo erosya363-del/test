@@ -15,11 +15,20 @@ const META_KEY = "meta";
 const STATS_KEY = "stats";
 const LOCK_KEY = "lock";
 const EIDS_KEY = "eids";
+const DECK_KEY = "deck";
 const LOG_KEYS = ["l0", "l1", "l2", "l3", "l4", "l5", "l6", "l7"] as const;
 const EVENTS_PER_LOG = 8;
 /** Пустой слот: API не любит пустую строку, а "-" раньше ломал разбор. */
 const EMPTY_SLOT = ".";
 const LOCK_TTL_MS = 8000;
+
+/** Общий раунд: порядок слов и позиция — одна на все телефоны. */
+export type RoundDeck = {
+  ids: number[];
+  pos: number;
+  updatedAt: number;
+  seed: string;
+};
 
 export function hexEncode(text: string): string {
   return Array.from(new TextEncoder().encode(text))
@@ -526,6 +535,112 @@ export function deviceId(): string {
   localStorage.setItem(key, created);
   return created;
 }
+
+function encodeDeck(deck: RoundDeck): string {
+  return [
+    "v=1",
+    `pos=${Math.max(0, Math.floor(deck.pos))}`,
+    `u=${deck.updatedAt || Date.now()}`,
+    `seed=${deck.seed || EMPTY_SLOT}`,
+    `ids=${deck.ids.map((n) => Math.max(0, Math.floor(n))).join("_")}`,
+  ].join(";");
+}
+
+function decodeDeck(raw: string): RoundDeck | null {
+  if (isEmptySlot(raw) || !raw.includes("ids=")) return null;
+  const map = Object.fromEntries(
+    raw.split(";").map((part) => {
+      const idx = part.indexOf("=");
+      return idx === -1 ? [part, ""] : [part.slice(0, idx), part.slice(idx + 1)];
+    }),
+  );
+  const ids = (map.ids ?? "")
+    .split("_")
+    .map((n) => Number(n))
+    .filter((n) => Number.isFinite(n) && n >= 0);
+  if (ids.length === 0) return null;
+  // pos === ids.length значит раунд закончен; иначе clamp в границы колоды.
+  const rawPos = Math.max(0, Number(map.pos ?? 0) || 0);
+  const pos = Math.min(rawPos, ids.length);
+  return {
+    ids,
+    pos,
+    updatedAt: Number(map.u ?? 0) || 0,
+    seed: map.seed && map.seed !== EMPTY_SLOT ? map.seed : "",
+  };
+}
+
+export async function loadDeck(): Promise<RoundDeck | null> {
+  try {
+    const raw = await cloudGet(DECK_KEY);
+    return decodeDeck(raw);
+  } catch {
+    return null;
+  }
+}
+
+export async function saveDeck(deck: RoundDeck): Promise<void> {
+  await cloudSet(DECK_KEY, encodeDeck({ ...deck, updatedAt: deck.updatedAt || Date.now() }));
+}
+
+export async function clearDeck(): Promise<void> {
+  await cloudSet(DECK_KEY, EMPTY_SLOT);
+}
+
+/** Запись колоды под замком — два телефона не создают два разных раунда. */
+export async function commitDeck(
+  mutate: (current: RoundDeck | null) => RoundDeck | null,
+): Promise<RoundDeck | null> {
+  let lastError: unknown;
+  const owner = `deck_${newId()}`;
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    try {
+      const locked = await acquireCloudLock(owner);
+      if (!locked) {
+        await new Promise((resolve) => setTimeout(resolve, 100 + attempt * 70));
+        continue;
+      }
+      try {
+        const current = await loadDeck();
+        const next = mutate(current);
+        if (next === null) {
+          await clearDeck();
+          return null;
+        }
+        const stamped = { ...next, updatedAt: Date.now() };
+        await saveDeck(stamped);
+        const check = await loadDeck();
+        if (
+          check &&
+          check.pos === stamped.pos &&
+          check.ids.length === stamped.ids.length &&
+          check.ids.every((id, i) => id === stamped.ids[i])
+        ) {
+          return check;
+        }
+        throw new Error("Гонка колоды, повторяем");
+      } finally {
+        await releaseCloudLock(owner);
+      }
+    } catch (error) {
+      lastError = error;
+      await new Promise((resolve) => setTimeout(resolve, 120 + attempt * 80));
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("Не удалось сохранить колоду");
+}
+
+export function shuffleWordIds(wordCount: number, take = 50): number[] {
+  const baseOrder = [...Array(Math.max(0, wordCount)).keys()];
+  for (let i = baseOrder.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [baseOrder[i], baseOrder[j]] = [baseOrder[j], baseOrder[i]];
+  }
+  return baseOrder.slice(0, Math.min(take, baseOrder.length));
+}
+
+/** Экспорт для юнит-доказательств без сети. */
+export const __deckTest = { encodeDeck, decodeDeck };
 
 export function cacheLocal(state: SharedState) {
   localStorage.setItem("dictation_money", String(state.money));

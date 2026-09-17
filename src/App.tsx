@@ -482,7 +482,8 @@ interface FixState {
 
 function App() {
   const store = useGameStore();
-  const { money, hints, settings, ready, syncing } = store;
+  const { money, hints, settings, ready, syncing, deck } = store;
+
   const [cabinetOpen, setCabinetOpen] = useState(() => window.location.hash === '#papa');
   const [gameState, setGameState] = useState<GameState>('splash');
   const [currentWordIndex, setCurrentWordIndex] = useState(0);
@@ -518,49 +519,88 @@ function App() {
     return () => clearTimeout(timer);
   }, [gameState, ready]);
 
-  const generateWordsOrder = useCallback(() => {
-    const baseOrder = [...Array(WORDS.length).keys()];
-    for (let i = baseOrder.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [baseOrder[i], baseOrder[j]] = [baseOrder[j], baseOrder[i]];
-    }
-    return baseOrder.slice(0, Math.min(50, baseOrder.length));
-  }, []);
-
-  const startGame = () => {
-    resumeAudio();
-    const order = generateWordsOrder();
-    setWordsOrder(order);
-    setCurrentWordIndex(0);
-    setScore(0);
-    setMistakes(0);
-    setStreak(0);
-    setBestStreak(0);
-    setTotalEarned(0);
-    setMistakeWords([]);
-    // Выбираем случайный вариант ошибки (но не 'none' в 70% случаев)
-    const wordIdx = order[0];
+  const pickErrorVariant = useCallback((wordIdx: number) => {
     const word = WORDS[wordIdx];
-    const errorVariants = word.errors.filter(e => e.errorType !== 'none');
-    const noErrorVariant = word.errors.find(e => e.errorType === 'none');
-    
-    let variant: number;
+    if (!word) return 0;
+    const errorVariants = word.errors.filter((e) => e.errorType !== 'none');
+    const noErrorVariant = word.errors.find((e) => e.errorType === 'none');
     if (Math.random() < 0.7 && errorVariants.length > 0) {
       const errVar = errorVariants[Math.floor(Math.random() * errorVariants.length)];
-      variant = word.errors.indexOf(errVar);
-    } else if (noErrorVariant) {
-      variant = word.errors.indexOf(noErrorVariant);
-    } else {
-      variant = 0;
+      return word.errors.indexOf(errVar);
     }
-    
-    setCurrentErrorVariant(variant);
+    if (noErrorVariant) return word.errors.indexOf(noErrorVariant);
+    return 0;
+  }, []);
+
+  const applyRoundLocally = useCallback(
+    (order: number[], pos: number, resetScore: boolean) => {
+      setWordsOrder(order);
+      setCurrentWordIndex(pos);
+      if (resetScore) {
+        setScore(0);
+        setMistakes(0);
+        setStreak(0);
+        setBestStreak(0);
+        setTotalEarned(0);
+        setMistakeWords([]);
+      }
+      setCurrentErrorVariant(pickErrorVariant(order[pos] ?? 0));
+      setShowHint(false);
+      setFeedback(null);
+      setFixState(null);
+      setUserFixedWord('');
+    },
+    [pickErrorVariant],
+  );
+
+  // Второй телефон подтягивает общую позицию/колоду во время игры.
+  useEffect(() => {
+    if (!deck || deck.ids.length === 0) return;
+    const playing =
+      gameState === 'showing' ||
+      gameState === 'guessing' ||
+      gameState === 'fixing' ||
+      gameState === 'result';
+    if (!playing) return;
+    if (deck.pos >= deck.ids.length) {
+      setWordsOrder(deck.ids);
+      setCurrentWordIndex(Math.max(0, deck.ids.length - 1));
+      setGameState('final');
+      return;
+    }
+    const sameOrder =
+      wordsOrder.length === deck.ids.length && wordsOrder.every((id, i) => id === deck.ids[i]);
+    if (sameOrder && currentWordIndex === deck.pos) return;
+    // Не откатываем локальный ход назад, если облако ещё старое.
+    if (sameOrder && currentWordIndex > deck.pos) return;
+    setWordsOrder(deck.ids);
+    setCurrentWordIndex(deck.pos);
+    setCurrentErrorVariant(pickErrorVariant(deck.ids[deck.pos] ?? 0));
     setShowHint(false);
     setFeedback(null);
     setFixState(null);
     setUserFixedWord('');
-    setGameState('showing');
-    playShowSound();
+    if (gameState === 'result' || gameState === 'fixing' || gameState === 'guessing') {
+      setGameState('showing');
+    }
+  }, [deck, gameState, wordsOrder, currentWordIndex, pickErrorVariant]);
+
+  const startGame = async () => {
+    resumeAudio();
+    try {
+      const round = await store.ensureRound(WORDS.length);
+      applyRoundLocally(round.ids, round.pos, true);
+      setGameState('showing');
+      playShowSound();
+    } catch {
+      // Без облака — локальный раунд, чтобы игра не вставала.
+      const order = [...Array(WORDS.length).keys()]
+        .sort(() => Math.random() - 0.5)
+        .slice(0, Math.min(50, WORDS.length));
+      applyRoundLocally(order, 0, true);
+      setGameState('showing');
+      playShowSound();
+    }
   };
 
   const goToGuessing = () => {
@@ -773,6 +813,7 @@ function App() {
   const nextWord = () => {
     playClickSound();
     if (currentWordIndex + 1 >= wordsOrder.length) {
+      void store.advanceRound(wordsOrder.length, wordsOrder);
       setGameState('final');
     } else {
       const nextIndex = currentWordIndex + 1;
@@ -786,30 +827,14 @@ function App() {
       }
       
       setCurrentWordIndex(nextIndex);
-      
-      // Выбираем вариант ошибки
-      const wordIdx = updatedOrder[nextIndex];
-      const word = WORDS[wordIdx];
-      const errorVariants = word.errors.filter(e => e.errorType !== 'none');
-      const noErrorVariant = word.errors.find(e => e.errorType === 'none');
-      
-      let variant: number;
-      if (Math.random() < 0.7 && errorVariants.length > 0) {
-        const errVar = errorVariants[Math.floor(Math.random() * errorVariants.length)];
-        variant = word.errors.indexOf(errVar);
-      } else if (noErrorVariant) {
-        variant = word.errors.indexOf(noErrorVariant);
-      } else {
-        variant = 0;
-      }
-      
-      setCurrentErrorVariant(variant);
+      setCurrentErrorVariant(pickErrorVariant(updatedOrder[nextIndex] ?? 0));
       setShowHint(false);
       setFeedback(null);
       setFixState(null);
       setUserFixedWord('');
       setGameState('showing');
       playShowSound();
+      void store.advanceRound(nextIndex, updatedOrder);
     }
   };
 

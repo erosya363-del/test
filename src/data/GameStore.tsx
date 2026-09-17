@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   cacheLocal,
+  commitDeck,
   commitEvent,
   deviceId,
   emptyState,
@@ -8,9 +9,12 @@ import {
   hexEncode,
   loadCloud,
   loadCloudMetaState,
+  loadDeck,
   newId,
   peekCloudMeta,
   readLocalCache,
+  shuffleWordIds,
+  type RoundDeck,
 } from "./cloud";
 import { START_HINTS, type GameEvent, type Settings, type SharedState } from "./types";
 
@@ -33,7 +37,13 @@ type GameStoreValue = {
   settings: Settings;
   events: GameEvent[];
   wordStats: SharedState["wordStats"];
+  /** Общая колода раунда (null — ещё не подтянули / сброшена). */
+  deck: RoundDeck | null;
   refresh: () => Promise<void>;
+  /** Взять незавершённый раунд из облака или создать новый. */
+  ensureRound: (wordCount: number) => Promise<RoundDeck>;
+  /** Обновить позицию (и порядок, если вставили повтор ошибки). */
+  advanceRound: (pos: number, ids?: number[]) => Promise<RoundDeck | null>;
   applyAnswer: (input: AnswerInput) => Promise<void>;
   applyHint: () => Promise<void>;
   applyShop: (pack: boolean) => Promise<void>;
@@ -46,18 +56,26 @@ const GameStoreContext = createContext<GameStoreValue | null>(null);
 
 export function GameStoreProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<SharedState>(() => readLocalCache() ?? emptyState());
+  const [deck, setDeck] = useState<RoundDeck | null>(null);
   const [ready, setReady] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const stateRef = useRef(state);
+  const deckRef = useRef(deck);
   const writeTail = useRef(Promise.resolve());
   const pendingWrites = useRef(0);
   const sleptRef = useRef(document.visibilityState === "hidden");
   stateRef.current = state;
+  deckRef.current = deck;
 
   const adopt = useCallback((next: SharedState) => {
     stateRef.current = next;
     setState(next);
     cacheLocal(next);
+  }, []);
+
+  const adoptDeck = useCallback((next: RoundDeck | null) => {
+    deckRef.current = next;
+    setDeck(next);
   }, []);
 
   const enqueue = useCallback((job: () => Promise<void>) => {
@@ -95,6 +113,16 @@ export function GameStoreProvider({ children }: { children: ReactNode }) {
     [adopt, enqueue],
   );
 
+  const pullDeck = useCallback(async () => {
+    try {
+      const remote = await loadDeck();
+      adoptDeck(remote);
+      return remote;
+    } catch {
+      return deckRef.current;
+    }
+  }, [adoptDeck]);
+
   const refresh = useCallback(
     (silent = true) => {
       return enqueue(async () => {
@@ -104,12 +132,13 @@ export function GameStoreProvider({ children }: { children: ReactNode }) {
           const remote = (await loadCloud()) ?? (await loadCloudMetaState());
           if (pendingWrites.current > 0) return;
           if (remote) adopt(remote);
+          await pullDeck();
         } finally {
           if (!silent) setSyncing(false);
         }
       });
     },
-    [adopt, enqueue],
+    [adopt, enqueue, pullDeck],
   );
 
   useEffect(() => {
@@ -122,6 +151,8 @@ export function GameStoreProvider({ children }: { children: ReactNode }) {
 
         const remote = (await loadCloud()) ?? quick ?? (await ensureCloudSeeded());
         if (!cancelled) adopt(remote);
+        const remoteDeck = await loadDeck();
+        if (!cancelled) adoptDeck(remoteDeck);
       } catch {
         try {
           const peek = await peekCloudMeta();
@@ -147,7 +178,7 @@ export function GameStoreProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [adopt]);
+  }, [adopt, adoptDeck]);
 
   useEffect(() => {
     let wakeTimerA = 0;
@@ -179,18 +210,31 @@ export function GameStoreProvider({ children }: { children: ReactNode }) {
     const tick = async () => {
       if (document.visibilityState === "hidden" || pendingWrites.current > 0) return;
       try {
-        const peek = await peekCloudMeta();
-        if (!peek || pendingWrites.current > 0) return;
+        const [peek, remoteDeck] = await Promise.all([peekCloudMeta(), loadDeck()]);
+        if (pendingWrites.current > 0) return;
         const now = stateRef.current;
-        if (peek.money === now.money && peek.hints === now.hints) return;
-        // Цифра в облаке другая — сразу ставим meta, журнал догоним refresh.
-        adopt({
-          ...now,
-          money: peek.money,
-          hints: peek.hints,
-          settings: peek.settings,
-        });
-        await refresh(true);
+        const moneyChanged = peek && (peek.money !== now.money || peek.hints !== now.hints);
+        if (moneyChanged && peek) {
+          // Цифра в облаке другая — сразу ставим meta, журнал догоним refresh.
+          adopt({
+            ...now,
+            money: peek.money,
+            hints: peek.hints,
+            settings: peek.settings,
+          });
+        }
+        const localDeck = deckRef.current;
+        const deckChanged =
+          (!localDeck && remoteDeck) ||
+          (localDeck && !remoteDeck) ||
+          (localDeck &&
+            remoteDeck &&
+            (localDeck.pos !== remoteDeck.pos ||
+              localDeck.updatedAt !== remoteDeck.updatedAt ||
+              localDeck.ids.length !== remoteDeck.ids.length ||
+              localDeck.ids.some((id, i) => id !== remoteDeck.ids[i])));
+        if (deckChanged) adoptDeck(remoteDeck);
+        if (moneyChanged) await refresh(true);
       } catch {
         /* сеть уснула */
       }
@@ -215,7 +259,71 @@ export function GameStoreProvider({ children }: { children: ReactNode }) {
       window.removeEventListener("online", wake);
       document.removeEventListener("pointerdown", onPointer);
     };
-  }, [adopt, refresh]);
+  }, [adopt, adoptDeck, refresh]);
+
+  const ensureRound = useCallback(
+    async (wordCount: number) => {
+      pendingWrites.current += 1;
+      setSyncing(true);
+      try {
+        const saved = await commitDeck((current) => {
+          if (current && current.ids.length > 0 && current.pos < current.ids.length) {
+            return current;
+          }
+          const ids = shuffleWordIds(wordCount, 50);
+          return {
+            ids,
+            pos: 0,
+            updatedAt: Date.now(),
+            seed: newId(),
+          };
+        });
+        if (!saved) {
+          throw new Error("Не удалось создать раунд");
+        }
+        adoptDeck(saved);
+        return saved;
+      } finally {
+        pendingWrites.current = Math.max(0, pendingWrites.current - 1);
+        setSyncing(false);
+      }
+    },
+    [adoptDeck],
+  );
+
+  const advanceRound = useCallback(
+    async (pos: number, ids?: number[]) => {
+      const base = deckRef.current;
+      const nextIds = ids ?? base?.ids ?? [];
+      if (nextIds.length === 0) return null;
+      const optimistic: RoundDeck = {
+        ids: nextIds,
+        pos: Math.max(0, Math.min(Math.floor(pos), nextIds.length)),
+        updatedAt: Date.now(),
+        seed: base?.seed || newId(),
+      };
+      adoptDeck(optimistic);
+      pendingWrites.current += 1;
+      try {
+        const saved = await commitDeck((current) => {
+          const from = current ?? optimistic;
+          return {
+            ...from,
+            ids: ids ?? from.ids,
+            pos: Math.max(0, Math.min(Math.floor(pos), (ids ?? from.ids).length)),
+            updatedAt: Date.now(),
+          };
+        });
+        adoptDeck(saved);
+        return saved;
+      } catch {
+        return optimistic;
+      } finally {
+        pendingWrites.current = Math.max(0, pendingWrites.current - 1);
+      }
+    },
+    [adoptDeck],
+  );
 
   const applyAnswer = useCallback(
     async (input: AnswerInput) => {
@@ -340,8 +448,14 @@ export function GameStoreProvider({ children }: { children: ReactNode }) {
         hints: START_HINTS,
         events: [...current.events, event],
       }));
+      try {
+        await commitDeck(() => null);
+        adoptDeck(null);
+      } catch {
+        adoptDeck(null);
+      }
     },
-    [persistEvent],
+    [adoptDeck, persistEvent],
   );
 
   const saveSettings = useCallback(
@@ -374,7 +488,10 @@ export function GameStoreProvider({ children }: { children: ReactNode }) {
       settings: state.settings,
       events: state.events,
       wordStats: state.wordStats,
+      deck,
       refresh,
+      ensureRound,
+      advanceRound,
       applyAnswer,
       applyHint,
       applyShop,
@@ -382,7 +499,21 @@ export function GameStoreProvider({ children }: { children: ReactNode }) {
       resetProgress,
       saveSettings,
     }),
-    [applyAnswer, applyHint, applyShop, payout, ready, refresh, resetProgress, saveSettings, state, syncing],
+    [
+      advanceRound,
+      applyAnswer,
+      applyHint,
+      applyShop,
+      deck,
+      ensureRound,
+      payout,
+      ready,
+      refresh,
+      resetProgress,
+      saveSettings,
+      state,
+      syncing,
+    ],
   );
 
   return <GameStoreContext.Provider value={value}>{children}</GameStoreContext.Provider>;
