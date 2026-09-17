@@ -2,6 +2,13 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useGameStore } from "../data/GameStore";
 import { DEFAULT_SETTINGS, type Settings } from "../data/types";
 
+type Notice = {
+  title: string;
+  message?: string;
+  tone: "ok" | "wait" | "bad";
+  busy?: boolean;
+};
+
 function formatTime(ts?: number) {
   if (!ts) return "—";
   return new Date(ts).toLocaleString("ru-RU", {
@@ -35,6 +42,28 @@ function kindLabel(kind: string) {
   }
 }
 
+/** Только цифры, без ведущих нулей: «02» → «2». */
+function digitsOnly(raw: string): string {
+  const digits = raw.replace(/\D/g, "");
+  if (!digits) return "";
+  return String(parseInt(digits, 10));
+}
+
+function moneyFromDraft(raw: string): number {
+  const n = parseInt(digitsOnly(raw), 10);
+  return Number.isFinite(n) ? Math.max(0, n) : 0;
+}
+
+function settingsToDraft(settings: Settings) {
+  return {
+    rewardCorrect: String(settings.rewardCorrect),
+    rewardStreak: String(settings.rewardStreak),
+    penaltyWrong: String(settings.penaltyWrong),
+    hintPrice: String(settings.hintPrice),
+    hintPackPrice: String(settings.hintPackPrice),
+  };
+}
+
 export function PapaCabinet({ onClose }: { onClose: () => void }) {
   const store = useGameStore();
   const [authed, setAuthed] = useState(() => sessionStorage.getItem("dictation_papa") === "1");
@@ -44,12 +73,15 @@ export function PapaCabinet({ onClose }: { onClose: () => void }) {
   const [payout, setPayout] = useState("100");
   const [reason, setReason] = useState("Снятие денег для сына");
   const [settings, setSettings] = useState<Settings>(store.settings);
+  const [draft, setDraft] = useState(() => settingsToDraft(store.settings));
   const [newPass, setNewPass] = useState("");
   const [newPass2, setNewPass2] = useState("");
-  const [savedNote, setSavedNote] = useState("");
+  const [notice, setNotice] = useState<Notice | null>(null);
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     setSettings(store.settings);
+    setDraft(settingsToDraft(store.settings));
   }, [store.settings]);
 
   useEffect(() => {
@@ -61,6 +93,12 @@ export function PapaCabinet({ onClose }: { onClose: () => void }) {
     return () => window.clearInterval(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authed]);
+
+  useEffect(() => {
+    if (!notice || notice.busy || notice.tone === "bad") return;
+    const timer = window.setTimeout(() => setNotice(null), 2200);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
 
   const report = useMemo(() => {
     const earned = store.events.filter((event) => event.kind === "ok").reduce((sum, event) => sum + event.moneyDelta, 0);
@@ -87,6 +125,37 @@ export function PapaCabinet({ onClose }: { onClose: () => void }) {
       setError("Неверный пароль");
     }
   };
+
+  const showOk = (title: string, message?: string) => {
+    setNotice({ title, message, tone: "ok" });
+  };
+
+  const showBad = (title: string, message?: string) => {
+    setNotice({ title, message, tone: "bad" });
+  };
+
+  const runAction = async (waiting: Notice, action: () => Promise<void>, done: Notice) => {
+    if (busy) return;
+    setBusy(true);
+    setNotice({ ...waiting, busy: true, tone: "wait" });
+    try {
+      await action();
+      setNotice({ ...done, tone: "ok" });
+    } catch {
+      showBad("Не вышло", "Проверьте интернет и попробуйте ещё раз");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const draftToSettings = (): Settings => ({
+    ...settings,
+    rewardCorrect: moneyFromDraft(draft.rewardCorrect),
+    rewardStreak: moneyFromDraft(draft.rewardStreak),
+    penaltyWrong: moneyFromDraft(draft.penaltyWrong),
+    hintPrice: moneyFromDraft(draft.hintPrice),
+    hintPackPrice: moneyFromDraft(draft.hintPackPrice),
+  });
 
   if (!authed) {
     return (
@@ -127,41 +196,41 @@ export function PapaCabinet({ onClose }: { onClose: () => void }) {
       <div className="play-stage papa-stage">
         <div className="text-center">
           <div className="play-badge bg-yellow-500/15 border-yellow-400/30 text-yellow-100">🔐 Кабинет папы</div>
-          <p className="text-white/60 text-sm mt-2">{store.syncing ? "Сохраняем…" : "Общая база с любого телефона"}</p>
+          <p className="text-white/60 text-sm mt-2">{store.syncing || busy ? "Сохраняем…" : "Общая база с любого телефона"}</p>
         </div>
 
         <div className="grid grid-cols-3 gap-2 w-full">
           <div className="glass-card !p-3 text-center">
             <p className="text-white/50 text-xs">Сейчас</p>
-            <p className="font-black text-yellow-300 text-lg">{store.money} ₽</p>
+            <p className="font-black text-yellow-300 text-lg tabular-nums">{store.money} ₽</p>
           </div>
           <div className="glass-card !p-3 text-center">
             <p className="text-white/50 text-xs">Заработал</p>
-            <p className="font-black text-green-300 text-lg">{report.earned} ₽</p>
+            <p className="font-black text-green-300 text-lg tabular-nums">{report.earned} ₽</p>
           </div>
           <div className="glass-card !p-3 text-center">
             <p className="text-white/50 text-xs">Сняли</p>
-            <p className="font-black text-orange-300 text-lg">{Math.abs(report.withdrawn)} ₽</p>
+            <p className="font-black text-orange-300 text-lg tabular-nums">{Math.abs(report.withdrawn)} ₽</p>
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-2 w-full">
-          <button type="button" className={tab === "stat" ? "btn-primary py-2.5 text-sm" : "btn-secondary py-2.5 text-sm"} onClick={() => setTab("stat")}>
+        <div className="papa-tabs w-full">
+          <button type="button" className={tab === "stat" ? "btn-primary papa-tab" : "btn-secondary papa-tab"} onClick={() => setTab("stat")}>
             📊 Анализ
           </button>
-          <button type="button" className={tab === "log" ? "btn-primary py-2.5 text-sm" : "btn-secondary py-2.5 text-sm"} onClick={() => setTab("log")}>
+          <button type="button" className={tab === "log" ? "btn-primary papa-tab" : "btn-secondary papa-tab"} onClick={() => setTab("log")}>
             📝 Ответы
           </button>
-          <button type="button" className={tab === "pay" ? "btn-primary py-2.5 text-sm" : "btn-secondary py-2.5 text-sm"} onClick={() => setTab("pay")}>
+          <button type="button" className={tab === "pay" ? "btn-primary papa-tab" : "btn-secondary papa-tab"} onClick={() => setTab("pay")}>
             💸 Деньги
           </button>
-          <button type="button" className={tab === "set" ? "btn-primary py-2.5 text-sm" : "btn-secondary py-2.5 text-sm"} onClick={() => setTab("set")}>
+          <button type="button" className={tab === "set" ? "btn-primary papa-tab" : "btn-secondary papa-tab"} onClick={() => setTab("set")}>
             ⚙️ Ещё
           </button>
         </div>
 
         {tab === "stat" && (
-          <div className="w-full space-y-3">
+          <div className="w-full space-y-4">
             <div className="glass-card w-full space-y-2">
               <p className="font-black text-lg">Сводка</p>
               <RuleMini label="Верных" value={String(report.answers.filter((event) => event.kind === "ok").length)} />
@@ -235,23 +304,47 @@ export function PapaCabinet({ onClose }: { onClose: () => void }) {
         )}
 
         {tab === "pay" && (
-          <div className="w-full space-y-3">
+          <div className="w-full space-y-4">
             <div className="glass-card w-full space-y-3">
               <p className="font-black text-lg">Снятие денег для сына</p>
-              <label>
+              <label className="block">
                 <span className="field-label">Сколько снять, ₽</span>
-                <input className="game-input" type="number" min={0} inputMode="numeric" value={payout} onChange={(event) => setPayout(event.target.value)} />
+                <input
+                  className="game-input"
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  autoComplete="off"
+                  value={payout}
+                  onChange={(event) => setPayout(digitsOnly(event.target.value))}
+                  onBlur={() => setPayout((prev) => digitsOnly(prev) || "0")}
+                />
               </label>
-              <label>
+              <label className="block">
                 <span className="field-label">За что</span>
                 <input className="game-input" value={reason} onChange={(event) => setReason(event.target.value)} />
               </label>
               <button
                 type="button"
                 className="w-full btn-primary play-cta"
-                onClick={async () => {
-                  await store.payout(Number(payout) || 0, reason);
-                  setSavedNote("Снятие записано");
+                disabled={busy}
+                onClick={() => {
+                  const amount = moneyFromDraft(payout);
+                  if (amount <= 0) {
+                    showBad("Укажите сумму", "Сколько снять с баланса?");
+                    return;
+                  }
+                  if (amount > store.money) {
+                    showBad("Мало денег", `Сейчас только ${store.money} ₽`);
+                    return;
+                  }
+                  void runAction(
+                    { title: "Снимаем…", message: `${amount} ₽`, tone: "wait", busy: true },
+                    async () => {
+                      await store.payout(amount, reason);
+                    },
+                    { title: "Перевод готов", message: `Сняли ${amount} ₽`, tone: "ok" },
+                  );
                 }}
               >
                 Снять с баланса
@@ -263,9 +356,15 @@ export function PapaCabinet({ onClose }: { onClose: () => void }) {
               <button
                 type="button"
                 className="w-full btn-danger play-cta"
-                onClick={async () => {
-                  await store.resetProgress("Сброс прогресса / снятие всех денег");
-                  setSavedNote("Баланс обнулён");
+                disabled={busy}
+                onClick={() => {
+                  void runAction(
+                    { title: "Сбрасываем…", message: "Деньги → 0", tone: "wait", busy: true },
+                    async () => {
+                      await store.resetProgress("Сброс прогресса / снятие всех денег");
+                    },
+                    { title: "Готово", message: "Баланс обнулён\nПодсказки: 3", tone: "ok" },
+                  );
                 }}
               >
                 Сбросить деньги сына
@@ -275,69 +374,103 @@ export function PapaCabinet({ onClose }: { onClose: () => void }) {
         )}
 
         {tab === "set" && (
-          <div className="w-full space-y-3">
-            <div className="glass-card w-full space-y-3">
+          <div className="w-full space-y-4">
+            <div className="glass-card w-full space-y-4">
               <p className="font-black text-lg">Премии</p>
               <p className="text-white/60">Штраф пишите плюсом: 3 значит −3 ₽</p>
-              <label>
-                <span className="field-label">За верный ответ, ₽</span>
-                <input className="game-input" type="number" inputMode="numeric" value={settings.rewardCorrect} onChange={(event) => setSettings({ ...settings, rewardCorrect: Number(event.target.value) })} />
-              </label>
-              <label>
-                <span className="field-label">За серию 3+, ₽</span>
-                <input className="game-input" type="number" inputMode="numeric" value={settings.rewardStreak} onChange={(event) => setSettings({ ...settings, rewardStreak: Number(event.target.value) })} />
-              </label>
-              <label>
-                <span className="field-label">Штраф за ошибку, ₽</span>
-                <input className="game-input" type="number" inputMode="numeric" value={settings.penaltyWrong} onChange={(event) => setSettings({ ...settings, penaltyWrong: Number(event.target.value) })} />
-              </label>
-              <label>
-                <span className="field-label">Цена подсказки, ₽</span>
-                <input className="game-input" type="number" inputMode="numeric" value={settings.hintPrice} onChange={(event) => setSettings({ ...settings, hintPrice: Number(event.target.value) })} />
-              </label>
-              <label>
-                <span className="field-label">Набор +3, ₽</span>
-                <input className="game-input" type="number" inputMode="numeric" value={settings.hintPackPrice} onChange={(event) => setSettings({ ...settings, hintPackPrice: Number(event.target.value) })} />
-              </label>
+              <MoneyField
+                label="За верный ответ, ₽"
+                value={draft.rewardCorrect}
+                onChange={(value) => setDraft((prev) => ({ ...prev, rewardCorrect: value }))}
+              />
+              <MoneyField
+                label="За серию 3+, ₽"
+                value={draft.rewardStreak}
+                onChange={(value) => setDraft((prev) => ({ ...prev, rewardStreak: value }))}
+              />
+              <MoneyField
+                label="Штраф за ошибку, ₽"
+                value={draft.penaltyWrong}
+                onChange={(value) => setDraft((prev) => ({ ...prev, penaltyWrong: value }))}
+              />
+              <MoneyField
+                label="Цена подсказки, ₽"
+                value={draft.hintPrice}
+                onChange={(value) => setDraft((prev) => ({ ...prev, hintPrice: value }))}
+              />
+              <MoneyField
+                label="Набор +3, ₽"
+                value={draft.hintPackPrice}
+                onChange={(value) => setDraft((prev) => ({ ...prev, hintPackPrice: value }))}
+              />
               <button
                 type="button"
                 className="w-full btn-primary play-cta"
-                onClick={async () => {
-                  await store.saveSettings(settings);
-                  setSavedNote("Премии обновлены");
+                disabled={busy}
+                onClick={() => {
+                  const next = draftToSettings();
+                  setSettings(next);
+                  setDraft(settingsToDraft(next));
+                  void runAction(
+                    { title: "Сохраняем…", message: "Премии на все телефоны", tone: "wait", busy: true },
+                    async () => {
+                      await store.saveSettings(next);
+                    },
+                    {
+                      title: "Сохранено",
+                      message: `Верно +${next.rewardCorrect} · серия +${next.rewardStreak}\nШтраф −${next.penaltyWrong}`,
+                      tone: "ok",
+                    },
+                  );
                 }}
               >
                 Сохранить премии
               </button>
-              <button type="button" className="w-full btn-secondary py-3" onClick={() => setSettings({ ...DEFAULT_SETTINGS, parentPassword: settings.parentPassword })}>
+              <button
+                type="button"
+                className="w-full btn-secondary py-3"
+                disabled={busy}
+                onClick={() => {
+                  const next = { ...DEFAULT_SETTINGS, parentPassword: settings.parentPassword };
+                  setSettings(next);
+                  setDraft(settingsToDraft(next));
+                  showOk("Вернули как было", "5 / 10 / −3 — нажмите «Сохранить премии»");
+                }}
+              >
                 Вернуть 5 / 10 / −3
               </button>
             </div>
-            <div className="glass-card w-full space-y-3">
+            <div className="glass-card w-full space-y-4">
               <p className="font-black text-lg">Сменить пароль</p>
               <p className="text-white/60">Пароль один на все телефоны. Сейчас сын без него сюда не зайдёт.</p>
-              <label>
+              <label className="block">
                 <span className="field-label">Новый пароль</span>
                 <input className="game-input" type="password" inputMode="numeric" autoComplete="off" placeholder="Новый пароль" value={newPass} onChange={(event) => setNewPass(event.target.value)} />
               </label>
-              <label>
+              <label className="block">
                 <span className="field-label">Ещё раз</span>
                 <input className="game-input" type="password" inputMode="numeric" autoComplete="off" placeholder="Ещё раз" value={newPass2} onChange={(event) => setNewPass2(event.target.value)} />
               </label>
               <button
                 type="button"
                 className="w-full btn-primary play-cta"
-                onClick={async () => {
+                disabled={busy}
+                onClick={() => {
                   if (!newPass.trim() || newPass !== newPass2) {
-                    setSavedNote("Пароли не совпали");
+                    showBad("Пароли не совпали", "Введите один и тот же пароль два раза");
                     return;
                   }
-                  const next = { ...settings, parentPassword: newPass.trim() };
+                  const next = { ...draftToSettings(), parentPassword: newPass.trim() };
                   setSettings(next);
-                  await store.saveSettings(next);
-                  setNewPass("");
-                  setNewPass2("");
-                  setSavedNote("Пароль изменён на всех телефонах");
+                  void runAction(
+                    { title: "Меняем пароль…", tone: "wait", busy: true },
+                    async () => {
+                      await store.saveSettings(next);
+                      setNewPass("");
+                      setNewPass2("");
+                    },
+                    { title: "Пароль изменён", message: "Уже на всех телефонах", tone: "ok" },
+                  );
                 }}
               >
                 Сохранить пароль
@@ -346,10 +479,66 @@ export function PapaCabinet({ onClose }: { onClose: () => void }) {
           </div>
         )}
 
-        {savedNote && <p className="text-green-300 font-bold text-center">{savedNote}</p>}
-        <button type="button" className="play-cta btn-secondary" onClick={onClose}>
+        <button type="button" className="play-cta btn-secondary papa-back" onClick={onClose}>
           ← В игру
         </button>
+      </div>
+
+      {notice && (
+        <NoticeSheet
+          notice={notice}
+          onOk={() => {
+            if (!notice.busy) setNotice(null);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function MoneyField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="block papa-field">
+      <span className="field-label">{label}</span>
+      <input
+        className="game-input"
+        type="text"
+        inputMode="numeric"
+        pattern="[0-9]*"
+        autoComplete="off"
+        enterKeyHint="done"
+        value={value}
+        onChange={(event) => onChange(digitsOnly(event.target.value))}
+        onBlur={() => onChange(digitsOnly(value) || "0")}
+      />
+    </label>
+  );
+}
+
+function NoticeSheet({ notice, onOk }: { notice: Notice; onOk: () => void }) {
+  const emoji = notice.tone === "ok" ? "✅" : notice.tone === "bad" ? "⚠️" : "⏳";
+  return (
+    <div className="ios-notice-root" role="dialog" aria-modal="true" aria-labelledby="ios-notice-title">
+      <button type="button" className="ios-notice-dim" aria-label="Закрыть" disabled={notice.busy} onClick={onOk} />
+      <div className={`ios-notice-card ios-notice-${notice.tone}`}>
+        <div className={`ios-notice-emoji ${notice.busy ? "ios-notice-spin" : ""}`}>{emoji}</div>
+        <p id="ios-notice-title" className="ios-notice-title">
+          {notice.title}
+        </p>
+        {notice.message && <p className="ios-notice-message">{notice.message}</p>}
+        {!notice.busy && (
+          <button type="button" className="ios-notice-ok btn-primary" onClick={onOk}>
+            OK
+          </button>
+        )}
       </div>
     </div>
   );
