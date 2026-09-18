@@ -5,6 +5,8 @@ import {
   START_HINTS,
   type EventKind,
   type GameEvent,
+  type PhotoItem,
+  type PhotoStatus,
   type Settings,
   type SharedState,
   type WordStat,
@@ -16,6 +18,8 @@ const STATS_KEY = "stats";
 const LOCK_KEY = "lock";
 const EIDS_KEY = "eids";
 const DECK_KEY = "deck";
+const PHOTOS_KEY = "photos";
+const BELL_KEY = "bell";
 const LOG_KEYS = ["l0", "l1", "l2", "l3", "l4", "l5", "l6", "l7"] as const;
 const EVENTS_PER_LOG = 8;
 /** Пустой слот: API не любит пустую строку, а "-" раньше ломал разбор. */
@@ -107,6 +111,11 @@ function encodeMeta(state: SharedState, updatedAt = Date.now()): string {
     `bpw=${s.letterPenaltyWrong}`,
     `hp=${s.hintPrice}`,
     `hpp=${s.hintPackPrice}`,
+    `g1=${s.grade1}`,
+    `g2=${s.grade2}`,
+    `g3=${s.grade3}`,
+    `g4=${s.grade4}`,
+    `g5=${s.grade5}`,
     `pp=${hexEncode(s.parentPassword || DEFAULT_SETTINGS.parentPassword)}`,
     `u=${updatedAt}`,
   ].join(";");
@@ -146,6 +155,11 @@ function decodeMeta(
       letterPenaltyWrong: Number(map.bpw ?? DEFAULT_SETTINGS.letterPenaltyWrong),
       hintPrice: Number(map.hp ?? DEFAULT_SETTINGS.hintPrice),
       hintPackPrice: Number(map.hpp ?? DEFAULT_SETTINGS.hintPackPrice),
+      grade1: Number(map.g1 ?? DEFAULT_SETTINGS.grade1),
+      grade2: Number(map.g2 ?? DEFAULT_SETTINGS.grade2),
+      grade3: Number(map.g3 ?? DEFAULT_SETTINGS.grade3),
+      grade4: Number(map.g4 ?? DEFAULT_SETTINGS.grade4),
+      grade5: Number(map.g5 ?? DEFAULT_SETTINGS.grade5),
       parentPassword: map.pp ? hexDecode(map.pp) : DEFAULT_SETTINGS.parentPassword,
     },
   };
@@ -301,6 +315,11 @@ export function replay(events: GameEvent[], settings = DEFAULT_SETTINGS): Shared
         brc,
         brs,
         bpw,
+        g1,
+        g2,
+        g3,
+        g4,
+        g5,
       ] = p;
       currentSettings = {
         rewardCorrect: Number(rc) || currentSettings.rewardCorrect,
@@ -318,6 +337,11 @@ export function replay(events: GameEvent[], settings = DEFAULT_SETTINGS): Shared
         letterRewardCorrect: Number(brc) || currentSettings.letterRewardCorrect,
         letterRewardStreak: Number(brs) || currentSettings.letterRewardStreak,
         letterPenaltyWrong: Number(bpw) || currentSettings.letterPenaltyWrong,
+        grade1: Number(g1) || currentSettings.grade1,
+        grade2: Number(g2) || currentSettings.grade2,
+        grade3: Number(g3) || currentSettings.grade3,
+        grade4: Number(g4) || currentSettings.grade4,
+        grade5: Number(g5) || currentSettings.grade5,
       };
     }
     money = Math.max(0, money + event.moneyDelta);
@@ -682,8 +706,109 @@ export function shuffleWordIds(wordCount: number, take = 50): number[] {
   return baseOrder.slice(0, Math.min(take, baseOrder.length));
 }
 
+function statusToCode(status: PhotoStatus): string {
+  if (status === "done") return "d";
+  if (status === "gone") return "g";
+  return "w";
+}
+
+function codeToStatus(code: string): PhotoStatus {
+  if (code === "d") return "done";
+  if (code === "g") return "gone";
+  return "wait";
+}
+
+export function encodePhotos(items: PhotoItem[]): string {
+  const newest = [...items].filter((item) => item.status !== "gone").sort((a, b) => b.ts - a.ts);
+  const parts: string[] = [];
+  for (const item of newest) {
+    const row = `${item.id}_${item.ts}_${statusToCode(item.status)}_${Math.max(0, item.grade)}_${hexEncode(item.url)}`;
+    const next = parts.length ? `${parts.join("|")}|${row}` : row;
+    if (next.length > 1000) break;
+    parts.push(row);
+  }
+  return parts.join("|");
+}
+
+export function decodePhotos(raw: string): PhotoItem[] {
+  if (isEmptySlot(raw)) return [];
+  const out: PhotoItem[] = [];
+  for (const part of raw.split("|")) {
+    const chunks = part.split("_");
+    if (chunks.length < 5) continue;
+    const [id, tsRaw, st, gradeRaw, ...urlParts] = chunks;
+    const urlHex = urlParts.join("_");
+    const url = hexDecode(urlHex);
+    if (!id || !url) continue;
+    out.push({
+      id,
+      ts: Number(tsRaw) || 0,
+      status: codeToStatus(st),
+      grade: Number(gradeRaw) || 0,
+      url,
+    });
+  }
+  return out.sort((a, b) => b.ts - a.ts);
+}
+
+export async function loadPhotos(): Promise<PhotoItem[]> {
+  try {
+    return decodePhotos(await cloudGet(PHOTOS_KEY));
+  } catch {
+    return [];
+  }
+}
+
+export async function savePhotos(items: PhotoItem[]): Promise<void> {
+  const packed = encodePhotos(items);
+  await cloudSet(PHOTOS_KEY, packed || EMPTY_SLOT);
+}
+
+export async function commitPhotos(
+  mutate: (current: PhotoItem[]) => PhotoItem[],
+): Promise<PhotoItem[]> {
+  let lastError: unknown;
+  const owner = `photo_${newId()}`;
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    try {
+      const locked = await acquireCloudLock(owner);
+      if (!locked) {
+        await new Promise((resolve) => setTimeout(resolve, 100 + attempt * 70));
+        continue;
+      }
+      try {
+        const current = await loadPhotos();
+        const next = mutate(current);
+        await savePhotos(next);
+        return await loadPhotos();
+      } finally {
+        await releaseCloudLock(owner);
+      }
+    } catch (error) {
+      lastError = error;
+      await new Promise((resolve) => setTimeout(resolve, 120 + attempt * 80));
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("Не удалось сохранить фото");
+}
+
+export async function loadBellSeen(): Promise<number> {
+  try {
+    const raw = await cloudGet(BELL_KEY);
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : 0;
+  } catch {
+    return 0;
+  }
+}
+
+export async function saveBellSeen(ts: number): Promise<void> {
+  await cloudSet(BELL_KEY, String(Math.max(0, Math.floor(ts))));
+}
+
 /** Экспорт для юнит-доказательств без сети. */
 export const __deckTest = { encodeDeck, decodeDeck };
+export const __photoTest = { encodePhotos, decodePhotos };
 
 export function cacheLocal(state: SharedState) {
   localStorage.setItem("dictation_money", String(state.money));

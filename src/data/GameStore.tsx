@@ -3,20 +3,25 @@ import {
   cacheLocal,
   commitDeck,
   commitEvent,
+  commitPhotos,
   deviceId,
   emptyState,
   ensureCloudSeeded,
   hexEncode,
+  loadBellSeen,
   loadCloud,
   loadCloudMetaState,
   loadDeck,
+  loadPhotos,
   newId,
   peekCloudMeta,
   readLocalCache,
+  saveBellSeen,
   shuffleWordIds,
   type RoundDeck,
 } from "./cloud";
-import { START_HINTS, type GameEvent, type Settings, type SharedState } from "./types";
+import { START_HINTS, type GameEvent, type PhotoItem, type Settings, type SharedState } from "./types";
+import { gradePay } from "./modes";
 
 type AnswerInput = {
   ok: boolean;
@@ -42,6 +47,8 @@ type GameStoreValue = {
   wordStats: SharedState["wordStats"];
   /** Общая колода раунда (null — ещё не подтянули / сброшена). */
   deck: RoundDeck | null;
+  photos: PhotoItem[];
+  bellSeenTs: number;
   refresh: () => Promise<void>;
   /** Взять незавершённый раунд из облака или создать новый. */
   ensureRound: (wordCount: number) => Promise<RoundDeck>;
@@ -53,6 +60,11 @@ type GameStoreValue = {
   payout: (amount: number, reason: string) => Promise<void>;
   /** Начислить деньги сыну (заслуга и т.п.). */
   credit: (amount: number, reason: string) => Promise<void>;
+  logDictation: (okCount: number, total: number) => Promise<void>;
+  addPhoto: (url: string, note?: string) => Promise<PhotoItem | null>;
+  gradePhoto: (id: string, grade: number) => Promise<void>;
+  removePhoto: (id: string) => Promise<void>;
+  markBellSeen: () => Promise<void>;
   resetProgress: (reason: string) => Promise<void>;
   saveSettings: (settings: Settings) => Promise<void>;
 };
@@ -62,6 +74,8 @@ const GameStoreContext = createContext<GameStoreValue | null>(null);
 export function GameStoreProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<SharedState>(() => readLocalCache() ?? emptyState());
   const [deck, setDeck] = useState<RoundDeck | null>(null);
+  const [photos, setPhotos] = useState<PhotoItem[]>([]);
+  const [bellSeenTs, setBellSeenTs] = useState(0);
   const [ready, setReady] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const stateRef = useRef(state);
@@ -138,6 +152,13 @@ export function GameStoreProvider({ children }: { children: ReactNode }) {
           if (pendingWrites.current > 0) return;
           if (remote) adopt(remote);
           await pullDeck();
+          try {
+            const [remotePhotos, seen] = await Promise.all([loadPhotos(), loadBellSeen()]);
+            setPhotos(remotePhotos);
+            setBellSeenTs(seen);
+          } catch {
+            /* photos optional */
+          }
         } finally {
           if (!silent) setSyncing(false);
         }
@@ -158,6 +179,11 @@ export function GameStoreProvider({ children }: { children: ReactNode }) {
         if (!cancelled) adopt(remote);
         const remoteDeck = await loadDeck();
         if (!cancelled) adoptDeck(remoteDeck);
+        const [remotePhotos, seen] = await Promise.all([loadPhotos(), loadBellSeen()]);
+        if (!cancelled) {
+          setPhotos(remotePhotos);
+          setBellSeenTs(seen);
+        }
       } catch {
         try {
           const peek = await peekCloudMeta();
@@ -455,6 +481,82 @@ export function GameStoreProvider({ children }: { children: ReactNode }) {
     [persistEvent],
   );
 
+  const logDictation = useCallback(
+    async (okCount: number, total: number) => {
+      const event: GameEvent = {
+        id: newId(),
+        ts: Date.now(),
+        kind: "dic",
+        moneyDelta: 0,
+        detail: `${okCount},${total}`,
+        reason: `Диктант ${okCount}/${total}`,
+        device: deviceId(),
+      };
+      await persistEvent(event, (now) => ({
+        ...now,
+        events: [...now.events, event],
+      }));
+    },
+    [persistEvent],
+  );
+
+  const addPhoto = useCallback(async (url: string, note?: string) => {
+    const item: PhotoItem = {
+      id: newId(),
+      ts: Date.now(),
+      status: "wait",
+      grade: 0,
+      url,
+      note,
+    };
+    const saved = await commitPhotos((current) => [item, ...current].slice(0, 12));
+    setPhotos(saved);
+    const event: GameEvent = {
+      id: newId(),
+      ts: Date.now(),
+      kind: "photo",
+      moneyDelta: 0,
+      reason: "Фото на проверку",
+      detail: item.id,
+      device: deviceId(),
+    };
+    await persistEvent(event, (now) => ({
+      ...now,
+      events: [...now.events, event],
+    }));
+    return saved.find((row) => row.id === item.id) ?? item;
+  }, [persistEvent]);
+
+  const gradePhoto = useCallback(
+    async (id: string, grade: number) => {
+      const g = Math.min(5, Math.max(1, Math.round(grade)));
+      const pay = gradePay(stateRef.current.settings, g);
+      const saved = await commitPhotos((current) =>
+        current.map((row) => (row.id === id ? { ...row, status: "done" as const, grade: g } : row)),
+      );
+      setPhotos(saved);
+      if (pay > 0) {
+        await credit(pay, `Оценка фото ${g}/5`);
+      }
+    },
+    [credit],
+  );
+
+  const removePhoto = useCallback(async (id: string) => {
+    const saved = await commitPhotos((current) => current.filter((row) => row.id !== id));
+    setPhotos(saved);
+  }, []);
+
+  const markBellSeen = useCallback(async () => {
+    const ts = Date.now();
+    setBellSeenTs(ts);
+    try {
+      await saveBellSeen(ts);
+    } catch {
+      /* offline */
+    }
+  }, []);
+
   const resetProgress = useCallback(
     async (reason: string) => {
       const current = stateRef.current;
@@ -507,6 +609,11 @@ export function GameStoreProvider({ children }: { children: ReactNode }) {
           settings.letterRewardCorrect,
           settings.letterRewardStreak,
           settings.letterPenaltyWrong,
+          settings.grade1,
+          settings.grade2,
+          settings.grade3,
+          settings.grade4,
+          settings.grade5,
         ].join(","),
         reason: settings.parentPassword !== current.settings.parentPassword ? "Сменили пароль" : "Изменили премии",
         device: deviceId(),
@@ -530,6 +637,8 @@ export function GameStoreProvider({ children }: { children: ReactNode }) {
       events: state.events,
       wordStats: state.wordStats,
       deck,
+      photos,
+      bellSeenTs,
       refresh,
       ensureRound,
       advanceRound,
@@ -538,6 +647,11 @@ export function GameStoreProvider({ children }: { children: ReactNode }) {
       applyShop,
       payout,
       credit,
+      logDictation,
+      addPhoto,
+      gradePhoto,
+      removePhoto,
+      markBellSeen,
       resetProgress,
       saveSettings,
     }),
@@ -546,12 +660,19 @@ export function GameStoreProvider({ children }: { children: ReactNode }) {
       applyAnswer,
       applyHint,
       applyShop,
+      addPhoto,
+      bellSeenTs,
       credit,
       deck,
       ensureRound,
+      gradePhoto,
+      logDictation,
+      markBellSeen,
       payout,
+      photos,
       ready,
       refresh,
+      removePhoto,
       resetProgress,
       saveSettings,
       state,

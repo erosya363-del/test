@@ -7,7 +7,9 @@ export type EventKind =
   | "pay"
   | "add"
   | "rst"
-  | "set";
+  | "set"
+  | "dic"
+  | "photo";
 
 export type Settings = {
   /** Режим «Глаз» */
@@ -28,6 +30,12 @@ export type Settings = {
   letterPenaltyWrong: number;
   hintPrice: number;
   hintPackPrice: number;
+  /** Оценка фото 1–5 → начисление ₽ */
+  grade1: number;
+  grade2: number;
+  grade3: number;
+  grade4: number;
+  grade5: number;
   parentPassword: string;
 };
 
@@ -56,6 +64,17 @@ export type WordStat = {
   lastShown?: string;
 };
 
+export type PhotoStatus = "wait" | "done" | "gone";
+
+export type PhotoItem = {
+  id: string;
+  ts: number;
+  status: PhotoStatus;
+  grade: number;
+  url: string;
+  note?: string;
+};
+
 export type SharedState = {
   money: number;
   hints: number;
@@ -81,6 +100,11 @@ export const DEFAULT_SETTINGS: Settings = {
   letterPenaltyWrong: 3,
   hintPrice: 15,
   hintPackPrice: 40,
+  grade1: 10,
+  grade2: 25,
+  grade3: 40,
+  grade4: 60,
+  grade5: 100,
   parentPassword: "654321",
 };
 
@@ -88,3 +112,6 @@ export const START_BALANCE = 2000;
 export const START_HINTS = 3;
 export const PARENT_PASSWORD = "654321";
 export const CLOUD_APP_KEY = "yr4anjeb";
+
+/** ImgBB API key — можно переопределить localStorage dictation_imgbb */
+export const IMGBB_API_KEY = "";

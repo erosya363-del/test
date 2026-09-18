@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useGameStore } from "../data/GameStore";
-import { DEFAULT_SETTINGS, type Settings } from "../data/types";
+import { DEFAULT_SETTINGS, type PhotoItem, type Settings } from "../data/types";
+import { gradePay } from "../data/modes";
+import { photoUploadReady } from "../photos";
 
 type Notice = {
   title: string;
@@ -39,6 +41,10 @@ function kindLabel(kind: string) {
       return "🌱 Старт";
     case "set":
       return "⚙️ Настройка";
+    case "dic":
+      return "📝 Диктант";
+    case "photo":
+      return "📷 Фото";
     default:
       return kind;
   }
@@ -72,6 +78,11 @@ function settingsToDraft(settings: Settings) {
     letterPenaltyWrong: String(settings.letterPenaltyWrong),
     hintPrice: String(settings.hintPrice),
     hintPackPrice: String(settings.hintPackPrice),
+    grade1: String(settings.grade1),
+    grade2: String(settings.grade2),
+    grade3: String(settings.grade3),
+    grade4: String(settings.grade4),
+    grade5: String(settings.grade5),
   };
 }
 
@@ -91,8 +102,37 @@ function sameRewards(a: Settings, b: Settings) {
     a.letterPenaltyWrong === b.letterPenaltyWrong &&
     a.hintPrice === b.hintPrice &&
     a.hintPackPrice === b.hintPackPrice &&
+    a.grade1 === b.grade1 &&
+    a.grade2 === b.grade2 &&
+    a.grade3 === b.grade3 &&
+    a.grade4 === b.grade4 &&
+    a.grade5 === b.grade5 &&
     a.parentPassword === b.parentPassword
   );
+}
+
+function photoStatusLabel(status: PhotoItem["status"]) {
+  if (status === "wait") return "Ждёт";
+  if (status === "done") return "Оценено";
+  return "Удалено";
+}
+
+function readImgbbKey(): string {
+  try {
+    return localStorage.getItem("dictation_imgbb")?.trim() || "";
+  } catch {
+    return "";
+  }
+}
+
+function writeImgbbKey(value: string) {
+  try {
+    const trimmed = value.trim();
+    if (trimmed) localStorage.setItem("dictation_imgbb", trimmed);
+    else localStorage.removeItem("dictation_imgbb");
+  } catch {
+    /* private mode */
+  }
 }
 
 export function PapaCabinet({ onClose }: { onClose: () => void }) {
@@ -100,8 +140,8 @@ export function PapaCabinet({ onClose }: { onClose: () => void }) {
   const [authed, setAuthed] = useState(() => sessionStorage.getItem("dictation_papa") === "1");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-  const [tab, setTab] = useState<"stat" | "log" | "pay" | "set">("stat");
-  const [rewardTab, setRewardTab] = useState<"eye" | "listen" | "stress" | "letter" | "shop">("eye");
+  const [tab, setTab] = useState<"stat" | "log" | "photo" | "pay" | "set">("stat");
+  const [rewardTab, setRewardTab] = useState<"eye" | "listen" | "stress" | "letter" | "shop" | "grade">("eye");
   const [payout, setPayout] = useState("100");
   const [payReason, setPayReason] = useState("Снятие денег для сына");
   const [creditAmount, setCreditAmount] = useState("50");
@@ -112,6 +152,9 @@ export function PapaCabinet({ onClose }: { onClose: () => void }) {
   const [newPass2, setNewPass2] = useState("");
   const [notice, setNotice] = useState<Notice | null>(null);
   const [busy, setBusy] = useState(false);
+  const [bellOpen, setBellOpen] = useState(false);
+  const [gradePick, setGradePick] = useState<Record<string, number>>({});
+  const [imgbbKey, setImgbbKey] = useState(() => readImgbbKey());
   /** Пока папа правит премии — облачный refresh не затирает поле обратно. */
   const draftDirtyRef = useRef(false);
 
@@ -153,6 +196,23 @@ export function PapaCabinet({ onClose }: { onClose: () => void }) {
     const worst = Object.values(store.wordStats).sort((a, b) => b.bad - a.bad || b.seen - a.seen);
     return { earned, penalties, shop, gifted, withdrawn, answers, hard, worst };
   }, [store.events, store.wordStats]);
+
+  const bellEvents = useMemo(() => {
+    return [...store.events]
+      .filter((event) => event.kind === "ok" || event.kind === "bad" || event.kind === "dic" || event.kind === "photo")
+      .sort((a, b) => b.ts - a.ts)
+      .slice(0, 20);
+  }, [store.events]);
+
+  const bellUnread = useMemo(
+    () => bellEvents.filter((event) => event.ts > store.bellSeenTs).length,
+    [bellEvents, store.bellSeenTs],
+  );
+
+  const waitingPhotos = useMemo(
+    () => store.photos.filter((photo) => photo.status === "wait").length,
+    [store.photos],
+  );
 
   const login = (event: FormEvent) => {
     event.preventDefault();
@@ -208,7 +268,19 @@ export function PapaCabinet({ onClose }: { onClose: () => void }) {
     letterPenaltyWrong: moneyFromDraft(draft.letterPenaltyWrong),
     hintPrice: moneyFromDraft(draft.hintPrice),
     hintPackPrice: moneyFromDraft(draft.hintPackPrice),
+    grade1: moneyFromDraft(draft.grade1),
+    grade2: moneyFromDraft(draft.grade2),
+    grade3: moneyFromDraft(draft.grade3),
+    grade4: moneyFromDraft(draft.grade4),
+    grade5: moneyFromDraft(draft.grade5),
   });
+
+  const openBell = () => {
+    setBellOpen((prev) => !prev);
+    if (!bellOpen && bellUnread > 0) {
+      void store.markBellSeen();
+    }
+  };
 
   if (!authed) {
     return (
@@ -247,10 +319,51 @@ export function PapaCabinet({ onClose }: { onClose: () => void }) {
   return (
     <div className="app-screen">
       <div className="play-stage papa-stage">
-        <div className="text-center">
-          <div className="play-badge bg-yellow-500/15 border-yellow-400/30 text-yellow-100">🔐 Кабинет папы</div>
+        <div className="text-center relative w-full">
+          <div className="flex items-center justify-center gap-2">
+            <div className="play-badge bg-yellow-500/15 border-yellow-400/30 text-yellow-100">🔐 Кабинет папы</div>
+            <button
+              type="button"
+              className="relative rounded-2xl bg-white/10 border border-white/15 px-3 py-2 text-xl active:scale-95"
+              aria-label="Уведомления"
+              onClick={openBell}
+            >
+              🔔
+              {bellUnread > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-5 h-5 px-1 rounded-full bg-red-500 text-white text-xs font-black flex items-center justify-center">
+                  {bellUnread > 9 ? "9+" : bellUnread}
+                </span>
+              )}
+            </button>
+          </div>
           <p className="text-white/60 text-sm mt-2">{store.syncing || busy ? "Сохраняем…" : "Общая база с любого телефона"}</p>
         </div>
+
+        {bellOpen && (
+          <div className="glass-card w-full space-y-2">
+            <p className="font-black text-lg">Последние действия</p>
+            {bellEvents.length === 0 ? (
+              <p className="text-white/50 text-sm">Пока тихо</p>
+            ) : (
+              bellEvents.slice(0, 12).map((event) => (
+                <div
+                  key={event.id}
+                  className={`rounded-2xl p-3 border ${event.ts > store.bellSeenTs ? "bg-yellow-500/10 border-yellow-400/30" : "bg-white/5 border-white/10"}`}
+                >
+                  <div className="flex justify-between gap-2">
+                    <p className="font-black text-sm">{kindLabel(event.kind)}</p>
+                    <p className="text-white/40 text-xs">{formatTime(event.ts)}</p>
+                  </div>
+                  {event.word && <p className="text-sm">Слово: {event.word}</p>}
+                  {event.reason && <p className="text-white/60 text-sm">{event.reason}</p>}
+                </div>
+              ))
+            )}
+            <button type="button" className="w-full btn-secondary py-2.5" onClick={() => setBellOpen(false)}>
+              Закрыть
+            </button>
+          </div>
+        )}
 
         <div className="grid grid-cols-3 gap-2 w-full">
           <div className="glass-card !p-3 text-center">
@@ -262,23 +375,26 @@ export function PapaCabinet({ onClose }: { onClose: () => void }) {
             <p className="font-black text-green-300 text-lg tabular-nums">{report.earned} ₽</p>
           </div>
           <div className="glass-card !p-3 text-center">
-            <p className="text-white/50 text-xs">Сняли</p>
-            <p className="font-black text-orange-300 text-lg tabular-nums">{Math.abs(report.withdrawn)} ₽</p>
+            <p className="text-white/50 text-xs">Фото</p>
+            <p className="font-black text-orange-300 text-lg tabular-nums">{waitingPhotos}</p>
           </div>
         </div>
 
         <div className="papa-tabs w-full">
           <button type="button" className={tab === "stat" ? "btn-primary papa-tab" : "btn-secondary papa-tab"} onClick={() => setTab("stat")}>
-            📊 Анализ
+            📊
           </button>
           <button type="button" className={tab === "log" ? "btn-primary papa-tab" : "btn-secondary papa-tab"} onClick={() => setTab("log")}>
-            📝 Ответы
+            📝
+          </button>
+          <button type="button" className={tab === "photo" ? "btn-primary papa-tab" : "btn-secondary papa-tab"} onClick={() => setTab("photo")}>
+            📷{waitingPhotos > 0 ? ` ${waitingPhotos}` : ""}
           </button>
           <button type="button" className={tab === "pay" ? "btn-primary papa-tab" : "btn-secondary papa-tab"} onClick={() => setTab("pay")}>
-            💸 Деньги
+            💸
           </button>
           <button type="button" className={tab === "set" ? "btn-primary papa-tab" : "btn-secondary papa-tab"} onClick={() => setTab("set")}>
-            ⚙️ Ещё
+            ⚙️
           </button>
         </div>
 
@@ -353,6 +469,97 @@ export function PapaCabinet({ onClose }: { onClose: () => void }) {
                   </div>
                 ))}
               </div>
+            )}
+          </div>
+        )}
+
+        {tab === "photo" && (
+          <div className="w-full space-y-3">
+            <div className="glass-card w-full space-y-2">
+              <p className="font-black text-lg">Фото на проверку</p>
+              <p className="text-white/60 text-sm">Оценка 1–5 начисляет деньги по ценам из настроек.</p>
+              {!photoUploadReady() && (
+                <p className="text-orange-300 text-sm">Ключ ImgBB ещё не задан — сын не сможет грузить фото. Вкладка ⚙️.</p>
+              )}
+            </div>
+            {store.photos.length === 0 ? (
+              <div className="glass-card w-full">
+                <p className="text-white/50">Пока нет загрузок.</p>
+              </div>
+            ) : (
+              store.photos.map((photo) => {
+                const pick = gradePick[photo.id] ?? (photo.grade || 5);
+                const pay = gradePay(store.settings, pick);
+                return (
+                  <div key={photo.id} className="glass-card w-full space-y-3">
+                    <div className="flex justify-between gap-2 items-start">
+                      <div>
+                        <p className="font-black">{photoStatusLabel(photo.status)}</p>
+                        <p className="text-white/40 text-sm">{formatTime(photo.ts)}</p>
+                        {photo.note && <p className="text-white/60 text-sm">{photo.note}</p>}
+                      </div>
+                      {photo.status === "done" && (
+                        <p className="text-yellow-300 font-black">{photo.grade}/5</p>
+                      )}
+                    </div>
+                    <a href={photo.url} target="_blank" rel="noreferrer" className="block">
+                      <img
+                        src={photo.url}
+                        alt="Фото тетради"
+                        className="w-full max-h-56 object-contain rounded-2xl bg-black/30 border border-white/10"
+                      />
+                    </a>
+                    {photo.status === "wait" && (
+                      <>
+                        <div className="flex gap-2 flex-wrap">
+                          {[1, 2, 3, 4, 5].map((g) => (
+                            <button
+                              key={g}
+                              type="button"
+                              className={pick === g ? "btn-primary px-3 py-2" : "btn-secondary px-3 py-2"}
+                              onClick={() => setGradePick((prev) => ({ ...prev, [photo.id]: g }))}
+                            >
+                              {g}
+                            </button>
+                          ))}
+                        </div>
+                        <button
+                          type="button"
+                          className="w-full btn-primary play-cta"
+                          disabled={busy}
+                          onClick={() => {
+                            void runAction(
+                              { title: "Начисляем…", message: `Оценка ${pick} · +${pay} ₽`, tone: "wait", busy: true },
+                              async () => {
+                                await store.gradePhoto(photo.id, pick);
+                              },
+                              { title: "Оценено", message: `+${pay} ₽ на баланс`, tone: "ok" },
+                            );
+                          }}
+                        >
+                          Начислить +{pay} ₽
+                        </button>
+                      </>
+                    )}
+                    <button
+                      type="button"
+                      className="w-full btn-danger py-2.5"
+                      disabled={busy}
+                      onClick={() => {
+                        void runAction(
+                          { title: "Удаляем…", tone: "wait", busy: true },
+                          async () => {
+                            await store.removePhoto(photo.id);
+                          },
+                          { title: "Удалено", message: "Запись снята из облака", tone: "ok" },
+                        );
+                      }}
+                    >
+                      Удалить запись
+                    </button>
+                  </div>
+                );
+              })
             )}
           </div>
         )}
@@ -484,6 +691,7 @@ export function PapaCabinet({ onClose }: { onClose: () => void }) {
                     ["stress", "🎵 Удар."],
                     ["letter", "🔤 Буквы"],
                     ["shop", "🛒 Магаз"],
+                    ["grade", "⭐ Оценки"],
                   ] as const
                 ).map(([id, label]) => (
                   <button
@@ -531,6 +739,16 @@ export function PapaCabinet({ onClose }: { onClose: () => void }) {
                   <MoneyField label="Набор +3, ₽" value={draft.hintPackPrice} onChange={(value) => patchDraft({ hintPackPrice: value })} />
                 </>
               )}
+              {rewardTab === "grade" && (
+                <>
+                  <p className="text-white/60 text-sm">Сколько ₽ за оценку фото 1–5</p>
+                  <MoneyField label="Оценка 1, ₽" value={draft.grade1} onChange={(value) => patchDraft({ grade1: value })} />
+                  <MoneyField label="Оценка 2, ₽" value={draft.grade2} onChange={(value) => patchDraft({ grade2: value })} />
+                  <MoneyField label="Оценка 3, ₽" value={draft.grade3} onChange={(value) => patchDraft({ grade3: value })} />
+                  <MoneyField label="Оценка 4, ₽" value={draft.grade4} onChange={(value) => patchDraft({ grade4: value })} />
+                  <MoneyField label="Оценка 5, ₽" value={draft.grade5} onChange={(value) => patchDraft({ grade5: value })} />
+                </>
+              )}
 
               <button
                 type="button"
@@ -565,6 +783,33 @@ export function PapaCabinet({ onClose }: { onClose: () => void }) {
                 }}
               >
                 Вернуть по умолчанию
+              </button>
+            </div>
+            <div className="glass-card w-full space-y-4">
+              <p className="font-black text-lg">Ключ фото (ImgBB)</p>
+              <p className="text-white/60 text-sm">Нужен, чтобы сын грузил фото. Ключ хранится на этом телефоне. Создать: imgbb.com → API.</p>
+              <label className="block">
+                <span className="field-label">API key</span>
+                <input
+                  className="game-input"
+                  type="text"
+                  autoComplete="off"
+                  spellCheck={false}
+                  value={imgbbKey}
+                  onChange={(event) => setImgbbKey(event.target.value)}
+                  placeholder="вставь ключ ImgBB"
+                />
+              </label>
+              <button
+                type="button"
+                className="w-full btn-primary play-cta"
+                onClick={() => {
+                  writeImgbbKey(imgbbKey);
+                  setImgbbKey(readImgbbKey());
+                  showOk(photoUploadReady() ? "Ключ сохранён" : "Ключ очищен", photoUploadReady() ? "Сын сможет грузить фото" : undefined);
+                }}
+              >
+                Сохранить ключ
               </button>
             </div>
             <div className="glass-card w-full space-y-4">

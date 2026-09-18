@@ -4,7 +4,16 @@ import { speakRu, stopSpeaking, canSpeak } from './speech';
 import { PapaCabinet } from './admin/PapaCabinet';
 import { useGameStore } from './data/GameStore';
 import { EXTRA_WORDS } from './data/vocabExtra';
-import { modeRewards, modeTitle, PLAY_MODES, type PlayMode } from './data/modes';
+import {
+  answersMatch,
+  DIFFICULTY_LEVELS,
+  modeRewards,
+  modeTitle,
+  PLAY_MODES,
+  type Difficulty,
+  type PlayMode,
+} from './data/modes';
+import { DictationGame, PhotoUploadPanel } from './DictationGame';
 
 const a = '\u0301'; // combining acute accent
 
@@ -474,7 +483,21 @@ const WORDS: WordData[] = [
   ...EXTRA_WORDS,
 ];
 
-type GameState = 'splash' | 'menu' | 'shop' | 'showing' | 'guessing' | 'fixing' | 'listen' | 'result' | 'final';
+type GameState =
+  | 'splash'
+  | 'menu'
+  | 'levelPick'
+  | 'shop'
+  | 'pic'
+  | 'showing'
+  | 'guessing'
+  | 'fixing'
+  | 'listen'
+  | 'write'
+  | 'dictation'
+  | 'uploadPhoto'
+  | 'result'
+  | 'final';
 
 interface FixState {
   selectedLetterIndex: number | null;
@@ -508,6 +531,12 @@ function App() {
   const [userFixedWord, setUserFixedWord] = useState<string>('');
   const [listenOptions, setListenOptions] = useState<string[]>([]);
   const [listenHeard, setListenHeard] = useState(false);
+  const [difficulty, setDifficulty] = useState<Difficulty>(1);
+  const difficultyRef = useRef<Difficulty>(1);
+  difficultyRef.current = difficulty;
+  const [pendingMode, setPendingMode] = useState<PlayMode>('eye');
+  const [writeDraft, setWriteDraft] = useState('');
+  const [dictWords, setDictWords] = useState<WordData[]>([]);
 
   useEffect(() => {
     const onHash = () => setCabinetOpen(window.location.hash === '#papa');
@@ -593,10 +622,12 @@ function App() {
   useEffect(() => {
     if (!deck || deck.ids.length === 0) return;
     const playing =
+      gameState === 'pic' ||
       gameState === 'showing' ||
       gameState === 'guessing' ||
       gameState === 'fixing' ||
       gameState === 'listen' ||
+      gameState === 'write' ||
       gameState === 'result';
     if (!playing) return;
     if (deck.pos >= deck.ids.length) {
@@ -619,29 +650,69 @@ function App() {
     setFeedback(null);
     setFixState(null);
     setUserFixedWord('');
-    if (gameState === 'result' || gameState === 'fixing' || gameState === 'guessing' || gameState === 'listen') {
-      setGameState(playModeRef.current === 'listen' ? 'listen' : 'showing');
+    if (gameState === 'result' || gameState === 'fixing' || gameState === 'guessing' || gameState === 'listen' || gameState === 'pic' || gameState === 'write') {
+      const mode = playModeRef.current;
+      const level = difficultyRef.current;
+      if (mode === 'listen') setGameState('listen');
+      else if (level === 1) setGameState('pic');
+      else if (level === 3) setGameState('write');
+      else setGameState('showing');
     }
   }, [deck, gameState, wordsOrder, currentWordIndex, pickErrorVariant, buildListenOptions]);
 
-  const startGame = async (mode: PlayMode) => {
+  const startGame = async (mode: PlayMode, level: Difficulty = 1) => {
     resumeAudio();
     stopSpeaking();
     setPlayMode(mode);
     playModeRef.current = mode;
+    setDifficulty(level);
+    difficultyRef.current = level;
+    setWriteDraft('');
+
+    if (mode === 'dictation') {
+      try {
+        const round = await store.ensureRound(WORDS.length);
+        const slice = round.ids.slice(0, 10).map((id) => WORDS[id]).filter(Boolean);
+        setDictWords(slice.length ? slice : WORDS.slice(0, 10));
+      } catch {
+        setDictWords(
+          [...WORDS].sort(() => Math.random() - 0.5).slice(0, 10),
+        );
+      }
+      setGameState('dictation');
+      return;
+    }
+
     try {
       const round = await store.ensureRound(WORDS.length);
       applyRoundLocally(round.ids, round.pos, true, mode);
-      setGameState(mode === 'listen' ? 'listen' : 'showing');
+      if (mode === 'listen') setGameState('listen');
+      else if (level === 1) setGameState('pic');
+      else if (level === 3) setGameState('write');
+      else setGameState('showing');
       playShowSound();
     } catch {
       const order = [...Array(WORDS.length).keys()]
         .sort(() => Math.random() - 0.5)
         .slice(0, Math.min(50, WORDS.length));
       applyRoundLocally(order, 0, true, mode);
-      setGameState(mode === 'listen' ? 'listen' : 'showing');
+      if (mode === 'listen') setGameState('listen');
+      else if (level === 1) setGameState('pic');
+      else if (level === 3) setGameState('write');
+      else setGameState('showing');
       playShowSound();
     }
+  };
+
+  const chooseMode = (mode: PlayMode) => {
+    playClickSound();
+    const meta = PLAY_MODES.find((item) => item.id === mode);
+    if (meta?.needsLevel) {
+      setPendingMode(mode);
+      setGameState('levelPick');
+      return;
+    }
+    void startGame(mode);
   };
 
   const answerExtras = () => ({
@@ -649,6 +720,59 @@ function App() {
     rewardStreak: rewards.streak,
     penaltyWrong: rewards.penalty,
   });
+
+  const handleWriteSubmit = () => {
+    if (!currentWord || !writeDraft.trim()) return;
+    playClickSound();
+    const ok =
+      answersMatch(writeDraft, currentWord.correct) ||
+      answersMatch(writeDraft, currentWord.correctPlain);
+    if (ok) {
+      setFeedback('correct');
+      const newStreak = streak + 1;
+      const reward = newStreak >= 2 ? rewards.streak : rewards.correct;
+      void store.applyAnswer({
+        ok: true,
+        word: currentWord.correctPlain,
+        shown: writeDraft.trim(),
+        expected: currentWord.correct,
+        choice: `Написал «${writeDraft.trim()}»`,
+        errorType: 'write',
+        detail: `Уровень 3 · ${modeTitle(playMode)}`,
+        streakAfter: newStreak,
+        ...answerExtras(),
+      });
+      setTotalEarned((prev) => prev + reward);
+      setScore((prev) => prev + 1);
+      setStreak(newStreak);
+      if (newStreak > bestStreak) setBestStreak(newStreak);
+      setShowConfetti(true);
+      setShowMoneyAnim({ amount: reward, key: Date.now() });
+      playCorrectSound();
+      setTimeout(() => {
+        setShowConfetti(false);
+        playCoinSound();
+      }, 1200);
+      setTimeout(() => setShowMoneyAnim(null), 2000);
+    } else {
+      setFeedback('wrong');
+      void store.applyAnswer({
+        ok: false,
+        word: currentWord.correctPlain,
+        shown: writeDraft.trim(),
+        expected: currentWord.correct,
+        choice: `Написал «${writeDraft.trim()}»`,
+        errorType: 'write',
+        detail: 'Уровень 3 · неверно',
+        streakAfter: 0,
+        ...answerExtras(),
+      });
+      setMistakes((prev) => prev + 1);
+      setStreak(0);
+      playWrongSound();
+    }
+    setGameState('result');
+  };
 
   const goToGuessing = () => {
     playClickSound();
@@ -873,11 +997,17 @@ function App() {
       setCurrentErrorVariant(pickErrorVariant(updatedOrder[nextIndex] ?? 0));
       setListenOptions(word ? buildListenOptions(word) : []);
       setListenHeard(false);
+      setWriteDraft('');
       setShowHint(false);
       setFeedback(null);
       setFixState(null);
       setUserFixedWord('');
-      setGameState(playModeRef.current === 'listen' ? 'listen' : 'showing');
+      const level = difficultyRef.current;
+      const mode = playModeRef.current;
+      if (mode === 'listen') setGameState('listen');
+      else if (level === 1) setGameState('pic');
+      else if (level === 3) setGameState('write');
+      else setGameState('showing');
       playShowSound();
       void store.advanceRound(nextIndex, updatedOrder);
     }
@@ -1118,8 +1248,8 @@ function App() {
                   <button
                     key={mode.id}
                     type="button"
-                    disabled={!ready || (mode.id === 'listen' && !canSpeak())}
-                    onClick={() => void startGame(mode.id)}
+                    disabled={!ready || ((mode.id === 'listen' || mode.id === 'dictation') && !canSpeak())}
+                    onClick={() => chooseMode(mode.id)}
                     className="w-full text-left bg-white/5 border border-white/10 rounded-2xl p-3 active:scale-[0.98] transition disabled:opacity-40"
                   >
                     <div className="flex items-center gap-3">
@@ -1141,11 +1271,152 @@ function App() {
               <p className="text-orange-300 text-xs text-center mb-2">Слух недоступен в этом браузере</p>
             )}
 
+            <button
+              onClick={() => {
+                playClickSound();
+                setGameState('uploadPhoto');
+              }}
+              className="w-full btn-secondary text-sm py-2.5 mb-2"
+            >
+              📷 Фото папе
+            </button>
             <button onClick={() => { resumeAudio(); playClickSound(); setGameState('shop'); }} className="w-full btn-secondary text-sm py-2.5 mb-2">
               🛒 Магазин
             </button>
             <button onClick={() => { playClickSound(); openCabinet(); }} className="w-full btn-secondary text-sm py-2.5">
               🔐 Кабинет папы
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ============ LEVEL PICK ============ */}
+      {gameState === 'levelPick' && (
+        <div className="app-screen">
+          <div className="play-stage">
+            <div className="text-center">
+              <div className="play-emoji">{PLAY_MODES.find((m) => m.id === pendingMode)?.emoji ?? '🎮'}</div>
+              <h2 className="text-2xl font-black bg-gradient-to-r from-yellow-200 via-pink-200 to-purple-200 bg-clip-text text-transparent">
+                Уровень сложности
+              </h2>
+              <p className="text-white/60 text-sm mt-1">{modeTitle(pendingMode)}</p>
+            </div>
+            <div className="w-full space-y-2">
+              {DIFFICULTY_LEVELS.map((level) => (
+                <button
+                  key={level.id}
+                  type="button"
+                  className="w-full text-left bg-white/5 border border-white/10 rounded-2xl p-3"
+                  onClick={() => void startGame(pendingMode, level.id)}
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl">{level.emoji}</span>
+                    <div>
+                      <p className="font-black">
+                        {level.id}. {level.title}
+                      </p>
+                      <p className="text-white/55 text-sm">{level.desc}</p>
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+            <button type="button" className="play-cta btn-secondary" onClick={() => setGameState('menu')}>
+              ← Назад
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ============ DICTATION ============ */}
+      {gameState === 'dictation' && (
+        <DictationGame
+          words={dictWords}
+          onFinished={(okCount, total) => {
+            void store.logDictation(okCount, total);
+          }}
+          onUploadPhoto={async (url) => {
+            await store.addPhoto(url, 'После диктанта');
+          }}
+          onBack={() => {
+            stopSpeaking();
+            setGameState('menu');
+          }}
+        />
+      )}
+
+      {gameState === 'uploadPhoto' && (
+        <PhotoUploadPanel
+          onUpload={async (url) => {
+            await store.addPhoto(url, 'Фото с меню');
+          }}
+          onBack={() => setGameState('menu')}
+        />
+      )}
+
+      {/* ============ PIC (level 1) ============ */}
+      {gameState === 'pic' && currentWord && (
+        <div className="app-screen app-screen-hud">
+          <div className="play-stage">
+            <div className="play-badge bg-yellow-500/15 border-yellow-400/30 text-yellow-100">
+              <span>🖼️</span>
+              <span>Уровень 1 · картинка</span>
+            </div>
+            <div className="play-hero">
+              <div className="play-emoji animate-float text-8xl">{currentWord.emoji}</div>
+              <p className="play-tip">Запомни, что это. Потом будет слово.</p>
+            </div>
+            <button
+              type="button"
+              className="play-cta btn-primary"
+              onClick={() => {
+                playClickSound();
+                setGameState('guessing');
+              }}
+            >
+              Далее →
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ============ WRITE (level 3) ============ */}
+      {gameState === 'write' && currentWord && (
+        <div className="app-screen app-screen-hud">
+          <div className="play-stage">
+            <div className="play-badge bg-orange-500/15 border-orange-400/30 text-orange-100">
+              <span>✍️</span>
+              <span>Уровень 3 · напиши сам</span>
+            </div>
+            <div className="play-hero">
+              <div className="play-emoji animate-float">{currentWord.emoji}</div>
+              <button
+                type="button"
+                className="btn-secondary py-3"
+                onClick={() => {
+                  resumeAudio();
+                  void speakRu(currentWord.correctPlain);
+                }}
+              >
+                🔊 Подсказка голосом
+              </button>
+            </div>
+            <label className="block w-full">
+              <span className="field-label">Впиши слово (можно с ударением)</span>
+              <input
+                className="game-input"
+                type="text"
+                inputMode="text"
+                autoComplete="off"
+                autoCorrect="off"
+                spellCheck={false}
+                value={writeDraft}
+                onChange={(event) => setWriteDraft(event.target.value)}
+                placeholder="как слышишь / видишь"
+              />
+            </label>
+            <button type="button" className="play-cta btn-primary" disabled={!writeDraft.trim()} onClick={handleWriteSubmit}>
+              Проверить
             </button>
           </div>
         </div>
@@ -1171,19 +1442,20 @@ function App() {
         </div>
       )}
 
-      {/* ============ SHOWING ============ */}
+      {/* ============ SHOWING (level 2: запомни верное) ============ */}
       {gameState === 'showing' && currentWord && (
         <div className="app-screen app-screen-hud">
           <div className="play-stage">
             <div className="play-badge bg-yellow-500/15 border-yellow-400/30 text-yellow-100">
               <span>📖</span>
-              <span>{modeTitle(playMode)} · запомни</span>
+              <span>Уровень 2 · запомни слово</span>
             </div>
             <div className="play-hero">
               <div className="play-emoji animate-float">{currentWord.emoji}</div>
               <div className="word-card-showing">
                 <div className="play-word animate-word-appear">{displayedWord}</div>
               </div>
+              <p className="play-tip">Запомни. Потом будет с ошибкой.</p>
             </div>
             <button onClick={goToGuessing} className="play-cta btn-primary">
               Далее →
