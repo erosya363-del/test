@@ -92,6 +92,31 @@ export type DicReport = {
   answers: DicAnswer[];
 };
 
+/** Задание «на сегодня» от папы — русский / математика / своё. */
+export type TaskKind =
+  | "ru_eye"
+  | "ru_listen"
+  | "ru_stress"
+  | "ru_letter"
+  | "ru_dictation"
+  | "math_today"
+  | "math_calc"
+  | "math_table"
+  | "custom";
+
+export type TaskStatus = "wait" | "done";
+
+export type TodayTask = {
+  id: string;
+  /** YYYY-MM-DD локальный день */
+  day: string;
+  kind: TaskKind;
+  title: string;
+  /** Целые ₽ при сдаче: плюс или минус */
+  reward: number;
+  status: TaskStatus;
+};
+
 export type SharedState = {
   money: number;
   hints: number;

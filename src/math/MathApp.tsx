@@ -16,22 +16,37 @@ import {
 
 type Screen =
   | { name: "hub" }
-  | { name: "today" }
   | { name: "train" }
   | { name: "table" }
   | { name: "tasks" }
-  | { name: "money" }
-  | { name: "soon"; title: string }
   | { name: "play"; exercises: MathExercise[]; title: string }
   | { name: "summary"; stats: SessionStats; title: string };
 
+export type MathLaunch = "today" | "calc" | "table" | null;
+
 type Props = {
   onBackToSubjects: () => void;
+  /** Старт из «Сегодня» — сразу сессия, без хаба. */
+  launch?: MathLaunch;
+  onSessionComplete?: () => void;
 };
 
-export function MathApp({ onBackToSubjects }: Props) {
+function initialScreen(launch?: MathLaunch): Screen {
+  if (launch === "today") {
+    return { name: "play", exercises: buildTodaySession(10), title: "Математика" };
+  }
+  if (launch === "calc") {
+    return { name: "play", exercises: buildTrainSession("calc", 10), title: "Вычисления" };
+  }
+  if (launch === "table") {
+    return { name: "play", exercises: buildTableSession(2, 10), title: "Таблица ×2" };
+  }
+  return { name: "hub" };
+}
+
+export function MathApp({ onBackToSubjects, launch = null, onSessionComplete }: Props) {
   const store = useGameStore();
-  const [screen, setScreen] = useState<Screen>({ name: "hub" });
+  const [screen, setScreen] = useState<Screen>(() => initialScreen(launch));
 
   if (screen.name === "hub") {
     return (
@@ -53,7 +68,7 @@ export function MathApp({ onBackToSubjects }: Props) {
                 <p className="text-xs text-white/50">Баланс</p>
                 <p className="text-xl font-black text-yellow-300">{store.ready ? `${store.money} ₽` : "…"}</p>
               </div>
-              <p className="text-[11px] text-white/40 text-right">Общий с русским</p>
+              <p className="text-[11px] text-white/40 text-right">Общий баланс</p>
             </div>
           </div>
 
@@ -77,23 +92,10 @@ export function MathApp({ onBackToSubjects }: Props) {
           </div>
 
           <button type="button" className="play-cta btn-secondary" onClick={onBackToSubjects}>
-            ← К предметам
+            ← Назад
           </button>
         </div>
       </div>
-    );
-  }
-
-  if (screen.name === "today") {
-    return (
-      <TodayIntro
-        money={store.money}
-        onStart={() => {
-          playClickSound();
-          setScreen({ name: "play", exercises: buildTodaySession(10), title: "Сегодня" });
-        }}
-        onBack={() => setScreen({ name: "hub" })}
-      />
     );
   }
 
@@ -128,7 +130,7 @@ export function MathApp({ onBackToSubjects }: Props) {
           <div className="play-badge bg-cyan-500/15 border-cyan-400/30 text-cyan-100">📖 Задачи</div>
           <div className="glass-card w-full text-center space-y-2">
             <p className="font-black text-xl">Текстовые задачи</p>
-            <p className="text-white/60 text-sm">10 задач · как в «Сегодня»</p>
+            <p className="text-white/60 text-sm">10 задач</p>
           </div>
           <button
             type="button"
@@ -148,41 +150,6 @@ export function MathApp({ onBackToSubjects }: Props) {
     );
   }
 
-  if (screen.name === "money") {
-    return (
-      <div className="app-screen">
-        <div className="play-stage">
-          <div className="play-badge bg-yellow-500/15 border-yellow-400/30 text-yellow-100">💰 Мои деньги</div>
-          <div className="glass-card w-full text-center space-y-2">
-            <p className="text-white/50 text-sm">Общий баланс</p>
-            <p className="text-4xl font-black text-yellow-300">{store.money} ₽</p>
-            <p className="text-white/50 text-xs">Русский и математика — один кошелёк</p>
-          </div>
-          <button type="button" className="play-cta btn-secondary" onClick={() => setScreen({ name: "hub" })}>
-            ← Назад
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  if (screen.name === "soon") {
-    return (
-      <div className="app-screen">
-        <div className="play-stage">
-          <div className="play-emoji">🛠️</div>
-          <div className="glass-card w-full text-center space-y-2">
-            <p className="font-black text-xl">{screen.title}</p>
-            <p className="text-white/60 text-sm">Скоро добавим. Пока зайди в «Сегодня».</p>
-          </div>
-          <button type="button" className="play-cta btn-secondary" onClick={() => setScreen({ name: "hub" })}>
-            ← Назад
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   if (screen.name === "play") {
     return (
       <MathPlay
@@ -190,7 +157,7 @@ export function MathApp({ onBackToSubjects }: Props) {
         exercises={screen.exercises}
         onCredit={(amount, reason) => store.credit(amount, reason)}
         onDone={(stats) => setScreen({ name: "summary", stats, title: screen.title })}
-        onExit={() => setScreen({ name: "hub" })}
+        onExit={() => (launch ? onBackToSubjects() : setScreen({ name: "hub" }))}
       />
     );
   }
@@ -216,21 +183,25 @@ export function MathApp({ onBackToSubjects }: Props) {
             className="play-cta btn-primary"
             onClick={() => {
               playClickSound();
-              setScreen({ name: "hub" });
+              onSessionComplete?.();
+              if (launch) onBackToSubjects();
+              else setScreen({ name: "hub" });
             }}
           >
             Закончить
           </button>
-          <button
-            type="button"
-            className="play-cta btn-secondary"
-            onClick={() => {
-              playClickSound();
-              setScreen({ name: "play", exercises: buildTodaySession(5), title: "Ещё 5" });
-            }}
-          >
-            Ещё 5 заданий
-          </button>
+          {!launch && (
+            <button
+              type="button"
+              className="play-cta btn-secondary"
+              onClick={() => {
+                playClickSound();
+                setScreen({ name: "play", exercises: buildTodaySession(5), title: "Ещё 5" });
+              }}
+            >
+              Ещё 5 заданий
+            </button>
+          )}
         </div>
       </div>
     );
@@ -240,12 +211,9 @@ export function MathApp({ onBackToSubjects }: Props) {
 }
 
 function openHub(id: MathHubId, setScreen: (s: Screen) => void) {
-  if (id === "today") setScreen({ name: "today" });
-  else if (id === "train") setScreen({ name: "train" });
+  if (id === "train") setScreen({ name: "train" });
   else if (id === "table") setScreen({ name: "table" });
-  else if (id === "tasks") setScreen({ name: "tasks" });
-  else if (id === "money") setScreen({ name: "money" });
-  else setScreen({ name: "soon", title: "Домашка" });
+  else setScreen({ name: "tasks" });
 }
 
 function trainTitle(cat: MathCategory): string {
@@ -258,40 +226,6 @@ function trainTitle(cat: MathCategory): string {
     multiply: "Умножение",
   };
   return map[cat];
-}
-
-function TodayIntro({
-  money,
-  onStart,
-  onBack,
-}: {
-  money: number;
-  onStart: () => void;
-  onBack: () => void;
-}) {
-  return (
-    <div className="app-screen">
-      <div className="play-stage">
-        <div className="play-badge bg-yellow-500/15 border-yellow-400/30 text-yellow-100">☀️ Сегодня</div>
-        <div className="glass-card w-full space-y-3 text-center">
-          <p className="font-black text-2xl">Сегодняшняя тренировка</p>
-          <p className="text-white/70">10 заданий</p>
-          <p className="text-white/50 text-sm">~7 минут</p>
-          <p className="text-yellow-300 font-black">Можно заработать до +20 ₽</p>
-        </div>
-        <button type="button" className="play-cta btn-primary" onClick={onStart}>
-          Начать
-        </button>
-        <div className="glass-card w-full !p-3 text-sm text-white/60 flex justify-between">
-          <span>Баланс</span>
-          <span className="text-yellow-300 font-black">{money} ₽</span>
-        </div>
-        <button type="button" className="play-cta btn-secondary" onClick={onBack}>
-          ← Назад
-        </button>
-      </div>
-    </div>
-  );
 }
 
 function TrainPick({ onPick, onBack }: { onPick: (c: MathCategory) => void; onBack: () => void }) {

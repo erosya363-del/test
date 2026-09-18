@@ -11,6 +11,9 @@ import {
   type PhotoStatus,
   type Settings,
   type SharedState,
+  type TaskKind,
+  type TaskStatus,
+  type TodayTask,
   type WordStat,
 } from "./types";
 
@@ -24,6 +27,7 @@ const PHOTOS_KEY = "photos";
 const BELL_KEY = "bell";
 const IMGBB_KEY = "imgbb";
 const DICS_KEY = "dics";
+const TASKS_KEY = "tasks";
 const LOG_KEYS = ["l0", "l1", "l2", "l3", "l4", "l5", "l6", "l7"] as const;
 const EVENTS_PER_LOG = 8;
 /** Пустой слот: API не любит пустую строку, а "-" раньше ломал разбор. */
@@ -944,9 +948,160 @@ export async function commitDics(
   throw lastError instanceof Error ? lastError : new Error("Не удалось сохранить диктант");
 }
 
+const TASK_KINDS: TaskKind[] = [
+  "ru_eye",
+  "ru_listen",
+  "ru_stress",
+  "ru_letter",
+  "ru_dictation",
+  "math_today",
+  "math_calc",
+  "math_table",
+  "custom",
+];
+
+function kindToCode(kind: TaskKind): string {
+  const idx = TASK_KINDS.indexOf(kind);
+  return idx >= 0 ? String(idx) : "8";
+}
+
+function codeToKind(code: string): TaskKind {
+  const idx = Number(code);
+  return TASK_KINDS[idx] ?? "custom";
+}
+
+function taskStatusToCode(status: TaskStatus): string {
+  return status === "done" ? "d" : "w";
+}
+
+function codeToTaskStatus(code: string): TaskStatus {
+  return code === "d" ? "done" : "wait";
+}
+
+export function todayDayKey(d = new Date()): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+export function encodeTasks(items: TodayTask[]): string {
+  const newest = [...items].sort((a, b) => b.id.localeCompare(a.id));
+  const parts: string[] = [];
+  for (const item of newest) {
+    const row = [
+      item.id,
+      item.day.replace(/-/g, ""),
+      kindToCode(item.kind),
+      taskStatusToCode(item.status),
+      String(Math.trunc(item.reward)),
+      hexEncode(item.title.slice(0, 40)),
+    ].join("_");
+    const next = parts.length ? `${parts.join("|")}|${row}` : row;
+    if (next.length > 1000) {
+      if (parts.length === 0) break;
+      break;
+    }
+    parts.push(row);
+  }
+  return parts.join("|");
+}
+
+export function decodeTasks(raw: string): TodayTask[] {
+  if (isEmptySlot(raw)) return [];
+  const out: TodayTask[] = [];
+  for (const part of raw.split("|")) {
+    const chunks = part.split("_");
+    if (chunks.length < 6) continue;
+    const [id, dayRaw, kindCode, st, rewardRaw, ...titleParts] = chunks;
+    if (!id || !dayRaw || dayRaw.length !== 8) continue;
+    const day = `${dayRaw.slice(0, 4)}-${dayRaw.slice(4, 6)}-${dayRaw.slice(6, 8)}`;
+    out.push({
+      id,
+      day,
+      kind: codeToKind(kindCode),
+      status: codeToTaskStatus(st),
+      reward: Number(rewardRaw) || 0,
+      title: hexDecode(titleParts.join("_")) || "Задание",
+    });
+  }
+  return out;
+}
+
+export async function loadTasks(): Promise<TodayTask[]> {
+  try {
+    return decodeTasks(await cloudGet(TASKS_KEY));
+  } catch {
+    return [];
+  }
+}
+
+export async function saveTasks(items: TodayTask[]): Promise<void> {
+  const packed = encodeTasks(items);
+  await cloudSet(TASKS_KEY, packed || EMPTY_SLOT);
+}
+
+export async function commitTasks(
+  mutate: (current: TodayTask[]) => TodayTask[],
+): Promise<TodayTask[]> {
+  let lastError: unknown;
+  const owner = `task_${newId()}`;
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    try {
+      const locked = await acquireCloudLock(owner);
+      if (!locked) {
+        await new Promise((resolve) => setTimeout(resolve, 100 + attempt * 70));
+        continue;
+      }
+      try {
+        const current = await loadTasks();
+        const next = mutate(current);
+        await saveTasks(next);
+        return await loadTasks();
+      } finally {
+        await releaseCloudLock(owner);
+      }
+    } catch (error) {
+      lastError = error;
+      await new Promise((resolve) => setTimeout(resolve, 120 + attempt * 80));
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("Не удалось сохранить задания");
+}
+
+export function autoTasksForDay(day: string): TodayTask[] {
+  return [
+    {
+      id: newId(),
+      day,
+      kind: "math_today",
+      title: "Математика · 10 заданий",
+      reward: 20,
+      status: "wait",
+    },
+    {
+      id: newId(),
+      day,
+      kind: "ru_eye",
+      title: "Русский · Глаз",
+      reward: 15,
+      status: "wait",
+    },
+    {
+      id: newId(),
+      day,
+      kind: "ru_dictation",
+      title: "Диктант 10",
+      reward: 25,
+      status: "wait",
+    },
+  ];
+}
+
 /** Экспорт для юнит-доказательств без сети. */
 export const __deckTest = { encodeDeck, decodeDeck };
 export const __photoTest = { encodePhotos, decodePhotos };
+export const __tasksTest = { encodeTasks, decodeTasks };
 
 export function cacheLocal(state: SharedState) {
   localStorage.setItem("dictation_money", String(state.money));

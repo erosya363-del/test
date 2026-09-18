@@ -1,8 +1,21 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useGameStore } from "../data/GameStore";
-import { DEFAULT_SETTINGS, type PhotoItem, type Settings } from "../data/types";
+import { todayDayKey } from "../data/cloud";
+import { DEFAULT_SETTINGS, type PhotoItem, type Settings, type TaskKind } from "../data/types";
 import { gradePay } from "../data/modes";
 import { photoUploadReady } from "../photos";
+
+const TASK_KIND_OPTIONS: { id: TaskKind; label: string }[] = [
+  { id: "math_today", label: "Математика 10" },
+  { id: "math_calc", label: "Вычисления" },
+  { id: "math_table", label: "Таблица" },
+  { id: "ru_eye", label: "Глаз" },
+  { id: "ru_listen", label: "Слух" },
+  { id: "ru_stress", label: "Ударение" },
+  { id: "ru_letter", label: "Буквы" },
+  { id: "ru_dictation", label: "Диктант" },
+  { id: "custom", label: "Своё" },
+];
 
 type Notice = {
   title: string;
@@ -158,7 +171,7 @@ export function PapaCabinet({ onClose }: { onClose: () => void }) {
   const [authed, setAuthed] = useState(() => sessionStorage.getItem("dictation_papa") === "1");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-  const [tab, setTab] = useState<"stat" | "log" | "photo" | "pay" | "set">("stat");
+  const [tab, setTab] = useState<"stat" | "log" | "photo" | "tasks" | "pay" | "set">("stat");
   const [rewardTab, setRewardTab] = useState<"eye" | "listen" | "stress" | "letter" | "shop" | "grade">("eye");
   const [payout, setPayout] = useState("100");
   const [payReason, setPayReason] = useState("Снятие денег для сына");
@@ -173,6 +186,9 @@ export function PapaCabinet({ onClose }: { onClose: () => void }) {
   const [bellOpen, setBellOpen] = useState(false);
   const [gradePick, setGradePick] = useState<Record<string, number>>({});
   const [imgbbKey, setImgbbKey] = useState(() => readImgbbKey());
+  const [taskKind, setTaskKind] = useState<TaskKind>("math_today");
+  const [taskTitle, setTaskTitle] = useState("Математика · 10 заданий");
+  const [taskReward, setTaskReward] = useState("20");
   /** Пока папа правит премии — облачный refresh не затирает поле обратно. */
   const draftDirtyRef = useRef(false);
 
@@ -415,6 +431,9 @@ export function PapaCabinet({ onClose }: { onClose: () => void }) {
           <button type="button" className={tab === "photo" ? "btn-primary papa-tab" : "btn-secondary papa-tab"} onClick={() => setTab("photo")}>
             📷{waitingPhotos > 0 ? ` ${waitingPhotos}` : ""}
           </button>
+          <button type="button" className={tab === "tasks" ? "btn-primary papa-tab" : "btn-secondary papa-tab"} onClick={() => setTab("tasks")}>
+            📋
+          </button>
           <button type="button" className={tab === "pay" ? "btn-primary papa-tab" : "btn-secondary papa-tab"} onClick={() => setTab("pay")}>
             💸
           </button>
@@ -656,6 +675,131 @@ export function PapaCabinet({ onClose }: { onClose: () => void }) {
                 <p className="text-white/50">Пока нет загрузок и диктантов.</p>
               </div>
             )}
+          </div>
+        )}
+
+        {tab === "tasks" && (
+          <div className="w-full space-y-4">
+            <div className="glass-card w-full space-y-3">
+              <p className="font-black text-lg">Задания на сегодня</p>
+              <p className="text-white/55 text-sm">Сын видит их во вкладке «Сегодня». Награда +/− начисляется при сдаче.</p>
+              <button
+                type="button"
+                className="w-full btn-primary play-cta"
+                disabled={busy}
+                onClick={() => {
+                  const day = todayDayKey();
+                  const has = store.tasks.some((row) => row.day === day);
+                  void runAction(
+                    { title: has ? "Заменяем…" : "Ставим авто…", tone: "wait", busy: true },
+                    async () => {
+                      await store.seedAutoTasks(true);
+                    },
+                    {
+                      title: "Авто-задания готовы",
+                      message: "Математика · Глаз · Диктант",
+                      tone: "ok",
+                    },
+                  );
+                }}
+              >
+                Авто-задания
+              </button>
+              {store.tasks.filter((row) => row.day === todayDayKey()).length === 0 ? (
+                <p className="text-white/50 text-sm">Пока пусто — добавь или нажми «Авто-задания».</p>
+              ) : (
+                store.tasks
+                  .filter((row) => row.day === todayDayKey())
+                  .map((task) => (
+                    <div key={task.id} className="bg-white/5 rounded-2xl p-3 border border-white/10 space-y-2">
+                      <div className="flex justify-between gap-2">
+                        <div>
+                          <p className="font-black">{task.title}</p>
+                          <p className="text-white/50 text-xs">{task.status === "done" ? "Сделано" : "Ждёт"}</p>
+                        </div>
+                        <p className={`font-black tabular-nums ${task.reward >= 0 ? "text-yellow-300" : "text-orange-300"}`}>
+                          {task.reward > 0 ? `+${task.reward}` : task.reward} ₽
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        className="w-full btn-danger py-2.5"
+                        disabled={busy}
+                        onClick={() => {
+                          void runAction(
+                            { title: "Удаляем…", tone: "wait", busy: true },
+                            async () => {
+                              await store.removeTask(task.id);
+                            },
+                            { title: "Удалено", tone: "ok" },
+                          );
+                        }}
+                      >
+                        Удалить
+                      </button>
+                    </div>
+                  ))
+              )}
+            </div>
+
+            <div className="glass-card w-full space-y-3">
+              <p className="font-black text-lg">Добавить задание</p>
+              <div className="grid grid-cols-3 gap-2">
+                {TASK_KIND_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    className={taskKind === opt.id ? "btn-primary py-2.5 text-xs font-black" : "btn-secondary py-2.5 text-xs font-black"}
+                    onClick={() => {
+                      setTaskKind(opt.id);
+                      setTaskTitle(opt.label);
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+              <label className="block">
+                <span className="field-label">Название</span>
+                <input
+                  className="game-input"
+                  value={taskTitle}
+                  onChange={(event) => setTaskTitle(event.target.value)}
+                  placeholder="Что сделать"
+                />
+              </label>
+              <label className="block">
+                <span className="field-label">Награда ₽ (+ или −)</span>
+                <input
+                  className="game-input"
+                  inputMode="numeric"
+                  value={taskReward}
+                  onChange={(event) => setTaskReward(event.target.value)}
+                  placeholder="20"
+                />
+              </label>
+              <button
+                type="button"
+                className="w-full btn-primary play-cta"
+                disabled={busy || !taskTitle.trim()}
+                onClick={() => {
+                  const reward = Math.trunc(Number(taskReward)) || 0;
+                  void runAction(
+                    { title: "Добавляем…", tone: "wait", busy: true },
+                    async () => {
+                      await store.addTask({
+                        kind: taskKind,
+                        title: taskTitle.trim(),
+                        reward,
+                      });
+                    },
+                    { title: "Добавлено", message: `${taskTitle.trim()} · ${reward > 0 ? "+" : ""}${reward} ₽`, tone: "ok" },
+                  );
+                }}
+              >
+                Добавить
+              </button>
+            </div>
           </div>
         )}
 

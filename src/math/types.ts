@@ -46,12 +46,9 @@ export function rewardFor(outcome: AttemptOutcome): number {
 }
 
 export const MATH_HUB_CARDS = [
-  { id: "today", emoji: "☀️", title: "Сегодня", desc: "10 заданий · ~7 мин" },
   { id: "train", emoji: "🏋️", title: "Тренировка", desc: "Выбери тему" },
   { id: "table", emoji: "✖️", title: "Таблица", desc: "Умножение" },
   { id: "tasks", emoji: "📖", title: "Задачи", desc: "Текстовые" },
-  { id: "hw", emoji: "📓", title: "Домашка", desc: "Скоро" },
-  { id: "money", emoji: "💰", title: "Мои деньги", desc: "Общий баланс" },
 ] as const;
 
 export type MathHubId = (typeof MATH_HUB_CARDS)[number]["id"];

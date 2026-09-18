@@ -16,7 +16,9 @@ import {
 } from './data/modes';
 import { DictationGame, PhotoUploadPanel } from './DictationGame';
 import { shuffleWordIds } from './data/cloud';
-import { MathApp } from './math/MathApp';
+import { MathApp, type MathLaunch } from './math/MathApp';
+import { TodayScreen } from './TodayScreen';
+import type { TodayTask } from './data/types';
 
 const a = '\u0301'; // combining acute accent
 
@@ -489,6 +491,8 @@ const WORDS: WordData[] = [
 type GameState =
   | 'splash'
   | 'subjects'
+  | 'today'
+  | 'money'
   | 'menu'
   | 'math'
   | 'levelPick'
@@ -542,6 +546,9 @@ function App() {
   const [pendingMode, setPendingMode] = useState<PlayMode>('eye');
   const [writeDraft, setWriteDraft] = useState('');
   const [dictWords, setDictWords] = useState<WordData[]>([]);
+  const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
+  const [mathLaunch, setMathLaunch] = useState<MathLaunch>(null);
+  const returnToTodayRef = useRef(false);
 
   useEffect(() => {
     warmVoices();
@@ -713,6 +720,8 @@ function App() {
 
   const chooseMode = (mode: PlayMode) => {
     playClickSound();
+    returnToTodayRef.current = false;
+    setActiveTaskId(null);
     const meta = PLAY_MODES.find((item) => item.id === mode);
     if (meta?.needsLevel) {
       setPendingMode(mode);
@@ -721,6 +730,49 @@ function App() {
     }
     void startGame(mode);
   };
+
+  const startTodayTask = (task: TodayTask) => {
+    setActiveTaskId(task.id);
+    returnToTodayRef.current = true;
+    if (task.kind === 'custom') {
+      void store.completeTask(task.id).then(() => {
+        setActiveTaskId(null);
+        setGameState('today');
+      });
+      return;
+    }
+    if (task.kind.startsWith('math_')) {
+      const launch: MathLaunch =
+        task.kind === 'math_calc' ? 'calc' : task.kind === 'math_table' ? 'table' : 'today';
+      setMathLaunch(launch);
+      setGameState('math');
+      return;
+    }
+    const modeMap: Record<string, PlayMode> = {
+      ru_eye: 'eye',
+      ru_listen: 'listen',
+      ru_stress: 'stress',
+      ru_letter: 'letter',
+      ru_dictation: 'dictation',
+    };
+    const mode = modeMap[task.kind];
+    if (!mode) return;
+    if (mode === 'eye' || mode === 'stress' || mode === 'letter') {
+      setPendingMode(mode);
+      setGameState('levelPick');
+      return;
+    }
+    void startGame(mode);
+  };
+
+  const finishActiveTask = () => {
+    if (!activeTaskId) return;
+    const id = activeTaskId;
+    setActiveTaskId(null);
+    void store.completeTask(id);
+  };
+
+  const backAfterPlay = () => (returnToTodayRef.current ? 'today' : 'menu') as GameState;
 
   const answerExtras = () => ({
     rewardCorrect: payCorrect,
@@ -1023,7 +1075,7 @@ function App() {
   const goBack = () => {
     playClickSound();
     stopSpeaking();
-    setGameState('menu');
+    setGameState(backAfterPlay());
   };
 
   const playListenWord = async () => {
@@ -1184,6 +1236,8 @@ function App() {
       {/* Top HUD — только во время раунда слов, не на меню/диктанте/выборе */}
       {gameState !== 'menu' &&
         gameState !== 'subjects' &&
+        gameState !== 'today' &&
+        gameState !== 'money' &&
         gameState !== 'math' &&
         gameState !== 'shop' &&
         gameState !== 'final' &&
@@ -1220,180 +1274,172 @@ function App() {
         </div>
       )}
 
-      {/* ============ SUBJECTS ============ */}
+      {/* ============ HOME HUB ============ */}
       {gameState === 'subjects' && (
         <div className="app-screen relative">
-          <div className="text-center mb-4 animate-fade-in-up">
-            <div className="relative inline-block mb-3">
-              <div className="text-7xl animate-float">🎮</div>
-            </div>
-            <h1 className="text-4xl font-black mb-2">
+          <div className="text-center mb-3 animate-fade-in-up">
+            <div className="text-6xl mb-2 animate-float">🎮</div>
+            <h1 className="text-3xl font-black mb-1">
               <span className="bg-gradient-to-r from-yellow-200 via-pink-200 to-purple-200 bg-clip-text text-transparent">
                 Диктант Квест
               </span>
             </h1>
-            <p className="text-base text-purple-200/80 font-medium">2 класс · выбери предмет</p>
+            <p className="text-sm text-purple-200/80 font-medium">2 класс</p>
           </div>
 
-          <div className="glass-card w-full animate-fade-in-up space-y-3" style={{ animationDelay: '0.1s' }}>
-            <div className="bg-white/5 rounded-2xl p-3 border border-white/10">
-              <div className="flex justify-between items-center">
-                <div>
-                  <p className="text-xs text-white/50">Баланс</p>
-                  <p className="text-xl font-black text-yellow-300">{ready ? `${money} ₽` : '…'}</p>
-                </div>
-                <div className="w-px h-8 bg-white/10" />
-                <div className="text-center">
-                  <p className="text-xs text-white/50">Подсказки</p>
-                  <p className="text-xl font-black text-blue-300">{ready ? `${hints} 💡` : '…'}</p>
-                </div>
+          <div className="glass-card w-full !p-3 mb-3 animate-fade-in-up" style={{ animationDelay: '0.05s' }}>
+            <div className="flex justify-between items-center">
+              <div>
+                <p className="text-xs text-white/50">Баланс</p>
+                <p className="text-xl font-black text-yellow-300">{ready ? `${money} ₽` : '…'}</p>
               </div>
-              <p className="text-[11px] text-white/40 mt-2 text-center">
-                {syncing ? 'Сохраняем…' : 'Один баланс на все предметы'}
-              </p>
+              <div className="w-px h-8 bg-white/10" />
+              <div className="text-center">
+                <p className="text-xs text-white/50">Подсказки</p>
+                <p className="text-xl font-black text-blue-300">{ready ? `${hints} 💡` : '…'}</p>
+              </div>
             </div>
-
-            <button
-              type="button"
-              className="w-full glass-card !p-5 text-left active:scale-[0.98] transition-transform border border-white/10"
-              onClick={() => {
-                playClickSound();
-                setGameState('menu');
-              }}
-            >
-              <div className="text-4xl mb-2">📝</div>
-              <p className="font-black text-xl">Русский язык</p>
-              <p className="text-white/55 text-sm mt-1">Глаз · Слух · Ударение · Буквы · Диктант</p>
-            </button>
-
-            <button
-              type="button"
-              className="w-full glass-card !p-5 text-left active:scale-[0.98] transition-transform border border-white/10"
-              onClick={() => {
-                playClickSound();
-                setGameState('math');
-              }}
-            >
-              <div className="text-4xl mb-2">🧮</div>
-              <p className="font-black text-xl">Математика</p>
-              <p className="text-white/55 text-sm mt-1">Примеры · Сравнение · Таблица · Задачи</p>
-            </button>
+            <p className="text-[11px] text-white/40 mt-2 text-center">
+              {syncing ? 'Сохраняем…' : 'Один баланс на всё'}
+            </p>
           </div>
 
-          <div className="mt-3 w-full space-y-2">
-            <button
-              type="button"
-              className="w-full btn-secondary play-cta"
-              onClick={() => {
-                playClickSound();
-                openCabinet();
-              }}
-            >
-              🔐 Кабинет папы
+          <div className="grid grid-cols-2 gap-2 w-full mb-3 animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
+            {[
+              { id: 'today', emoji: '☀️', title: 'Сегодня', desc: 'Задания папы', go: () => setGameState('today') },
+              { id: 'ru', emoji: '📝', title: 'Русский', desc: 'Глаз · Диктант', go: () => setGameState('menu') },
+              { id: 'math', emoji: '🧮', title: 'Математика', desc: 'Примеры · Таблица', go: () => { setMathLaunch(null); setGameState('math'); } },
+              { id: 'photo', emoji: '📷', title: 'Фото папе', desc: 'Тетрадь', go: () => setGameState('uploadPhoto') },
+              { id: 'shop', emoji: '🛒', title: 'Магазин', desc: 'Подсказки', go: () => { resumeAudio(); setGameState('shop'); } },
+              { id: 'money', emoji: '💰', title: 'Мои деньги', desc: 'Баланс', go: () => setGameState('money') },
+            ].map((card) => (
+              <button
+                key={card.id}
+                type="button"
+                className="glass-card !p-4 text-left active:scale-[0.98] transition-transform"
+                onClick={() => {
+                  playClickSound();
+                  card.go();
+                }}
+              >
+                <div className="text-3xl mb-1">{card.emoji}</div>
+                <p className="font-black text-base">{card.title}</p>
+                <p className="text-white/55 text-xs mt-0.5">{card.desc}</p>
+              </button>
+            ))}
+          </div>
+
+          <button
+            type="button"
+            className="w-full btn-secondary play-cta"
+            onClick={() => {
+              playClickSound();
+              openCabinet();
+            }}
+          >
+            🔐 Кабинет папы
+          </button>
+        </div>
+      )}
+
+      {gameState === 'today' && (
+        <TodayScreen
+          onBack={() => setGameState('subjects')}
+          onStartTask={(task) => {
+            void startTodayTask(task);
+          }}
+        />
+      )}
+
+      {gameState === 'money' && (
+        <div className="app-screen">
+          <div className="play-stage">
+            <div className="play-badge bg-yellow-500/15 border-yellow-400/30 text-yellow-100">💰 Мои деньги</div>
+            <div className="glass-card w-full text-center space-y-2">
+              <p className="text-white/50 text-sm">Общий баланс</p>
+              <p className="text-4xl font-black text-yellow-300">{money} ₽</p>
+              <p className="text-white/50 text-xs">Русский и математика — один кошелёк</p>
+            </div>
+            <button type="button" className="play-cta btn-secondary" onClick={() => setGameState('subjects')}>
+              ← Назад
             </button>
           </div>
         </div>
       )}
 
       {gameState === 'math' && (
-        <MathApp onBackToSubjects={() => setGameState('subjects')} />
+        <MathApp
+          key={mathLaunch || 'hub'}
+          launch={mathLaunch}
+          onBackToSubjects={() => {
+            setMathLaunch(null);
+            setGameState(returnToTodayRef.current ? 'today' : 'subjects');
+          }}
+          onSessionComplete={() => {
+            finishActiveTask();
+          }}
+        />
       )}
 
-      {/* ============ MENU ============ */}
+      {/* ============ RUSSIAN MENU ============ */}
       {gameState === 'menu' && (
         <div className="app-screen relative">
-          <div className="text-center mb-4 animate-fade-in-up">
-            <div className="relative inline-block mb-3">
-              <div className="text-7xl animate-float">📝</div>
-              <div className="absolute -top-2 -right-4 text-2xl animate-spin-slow">✨</div>
-            </div>
-            <h1 className="text-4xl font-black mb-2">
+          <div className="text-center mb-3 animate-fade-in-up">
+            <div className="text-6xl mb-2 animate-float">📝</div>
+            <h1 className="text-3xl font-black mb-1">
               <span className="bg-gradient-to-r from-yellow-200 via-pink-200 to-purple-200 bg-clip-text text-transparent">
-                Диктант Квест
+                Русский язык
               </span>
             </h1>
-            <p className="text-base text-purple-200/80 font-medium">
-              2 класс • {WORDS.length} слов
-            </p>
+            <p className="text-sm text-purple-200/80 font-medium">{WORDS.length} слов</p>
           </div>
 
-          <div className="glass-card w-full animate-fade-in-up" style={{ animationDelay: '0.15s' }}>
-            <div className="bg-white/5 rounded-2xl p-3 mb-3 border border-white/10">
-              <div className="flex justify-between items-center">
-                <div>
-                  <p className="text-xs text-white/50">Баланс</p>
-                  <p className="text-xl font-black text-yellow-300">{ready ? `${money} ₽` : "…"}</p>
-                </div>
-                <div className="w-px h-8 bg-white/10" />
-                <div className="text-center">
-                  <p className="text-xs text-white/50">Подсказки</p>
-                  <p className="text-xl font-black text-blue-300">{ready ? `${hints} 💡` : "…"}</p>
-                </div>
+          <div className="glass-card w-full !p-3 mb-3">
+            <div className="flex justify-between items-center">
+              <div>
+                <p className="text-xs text-white/50">Баланс</p>
+                <p className="text-xl font-black text-yellow-300">{ready ? `${money} ₽` : '…'}</p>
               </div>
-              <p className="text-[11px] text-white/40 mt-2 text-center">
-                {syncing ? "Сохраняем…" : "Один баланс · телефон как приложение"}
-              </p>
+              <p className="text-[11px] text-white/40 text-right">Общий баланс</p>
             </div>
-
-            <p className="field-label mb-2">Выбери режим</p>
-            <div className="space-y-2 mb-3">
-              {PLAY_MODES.map((mode) => {
-                const r = modeRewards(settings, mode.id);
-                return (
-                  <button
-                    key={mode.id}
-                    type="button"
-                    disabled={!ready || ((mode.id === 'listen' || mode.id === 'dictation') && !canSpeak())}
-                    onClick={() => chooseMode(mode.id)}
-                    className="w-full text-left bg-white/5 border border-white/10 rounded-2xl p-3 active:scale-[0.98] transition disabled:opacity-40"
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className="text-2xl">{mode.emoji}</span>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-black text-base">{mode.title}</p>
-                        <p className="text-white/55 text-sm">{mode.desc}</p>
-                        <p className="text-yellow-300/80 text-xs mt-1 tabular-nums">
-                          {mode.id === 'dictation'
-                            ? 'оценка папы · 1–5'
-                            : `+${r.correct} / +${r.streak} / −${r.penalty} ₽`}
-                        </p>
-                      </div>
-                      <span className="text-white/40 text-lg">→</span>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-            {canSpeak() ? null : (
-              <p className="text-orange-300 text-xs text-center mb-2">Слух недоступен в этом браузере</p>
-            )}
-
-            <button
-              onClick={() => {
-                playClickSound();
-                setGameState('uploadPhoto');
-              }}
-              className="w-full btn-secondary text-sm py-2.5 mb-2"
-            >
-              📷 Фото папе
-            </button>
-            <button onClick={() => { resumeAudio(); playClickSound(); setGameState('shop'); }} className="w-full btn-secondary text-sm py-2.5 mb-2">
-              🛒 Магазин
-            </button>
-            <button onClick={() => { playClickSound(); openCabinet(); }} className="w-full btn-secondary text-sm py-2.5 mb-2">
-              🔐 Кабинет папы
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                playClickSound();
-                setGameState('subjects');
-              }}
-              className="w-full btn-secondary text-sm py-2.5"
-            >
-              ← К предметам
-            </button>
           </div>
+
+          <div className="grid grid-cols-2 gap-2 w-full mb-3">
+            {PLAY_MODES.map((mode) => {
+              const r = modeRewards(settings, mode.id);
+              const disabled = !ready || ((mode.id === 'listen' || mode.id === 'dictation') && !canSpeak());
+              return (
+                <button
+                  key={mode.id}
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => chooseMode(mode.id)}
+                  className="glass-card !p-4 text-left active:scale-[0.98] transition-transform disabled:opacity-40"
+                >
+                  <div className="text-3xl mb-1">{mode.emoji}</div>
+                  <p className="font-black text-base">{mode.title}</p>
+                  <p className="text-white/55 text-xs mt-0.5">{mode.desc}</p>
+                  <p className="text-yellow-300/80 text-xs mt-1 tabular-nums">
+                    {mode.id === 'dictation' ? 'оценка папы' : `+${r.correct} ₽`}
+                  </p>
+                </button>
+              );
+            })}
+          </div>
+          {canSpeak() ? null : (
+            <p className="text-orange-300 text-xs text-center mb-2">Слух недоступен в этом браузере</p>
+          )}
+
+          <button
+            type="button"
+            onClick={() => {
+              playClickSound();
+              setGameState('subjects');
+            }}
+            className="w-full btn-secondary play-cta"
+          >
+            ← Назад
+          </button>
         </div>
       )}
 
@@ -1431,7 +1477,7 @@ function App() {
                 </button>
               ))}
             </div>
-            <button type="button" className="play-cta btn-secondary" onClick={() => setGameState('menu')}>
+            <button type="button" className="play-cta btn-secondary" onClick={() => setGameState(backAfterPlay())}>
               ← Назад
             </button>
           </div>
@@ -1444,16 +1490,18 @@ function App() {
           words={dictWords}
           onPaperDone={() => {
             void store.logDictation(0, dictWords.length || 10, 'paper');
+            finishActiveTask();
           }}
           onUploadPhoto={async (url) => {
             await store.addPhoto(url, 'Диктант на бумаге');
           }}
           onSendKeys={async (answers) => {
             await store.addDicReport(answers);
+            finishActiveTask();
           }}
           onBack={() => {
             stopSpeaking();
-            setGameState('menu');
+            setGameState(backAfterPlay());
           }}
         />
       )}
@@ -1463,7 +1511,7 @@ function App() {
           onUpload={async (url) => {
             await store.addPhoto(url, 'Фото с меню');
           }}
-          onBack={() => setGameState('menu')}
+          onBack={() => setGameState('subjects')}
         />
       )}
 
@@ -1549,7 +1597,7 @@ function App() {
             <ShopItem emoji="🎁" title="Набор +3" desc="Три подсказки сразу" price={settings.hintPackPrice} owned={hints} canBuy={money >= settings.hintPackPrice} gradient="from-purple-500/20 to-pink-500/20" border="border-purple-400/30" onBuy={buyHintPack} isPack />
           </div>
 
-          <button onClick={() => { playClickSound(); setGameState('menu'); }} className="mt-5 btn-secondary px-8 py-3 animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
+          <button onClick={() => { playClickSound(); setGameState('subjects'); }} className="mt-5 btn-secondary px-8 py-3 animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
             ← Назад
           </button>
         </div>
@@ -1815,7 +1863,17 @@ function App() {
 
             <div className="flex gap-2">
               <button onClick={() => void startGame(playMode, difficulty)} className="flex-1 btn-primary py-2.5 text-sm">🔄 Ещё</button>
-              <button onClick={() => { playClickSound(); setGameState('menu'); }} className="flex-1 btn-secondary py-2.5 text-sm">🏠 Меню</button>
+              <button
+                onClick={() => {
+                  playClickSound();
+                  const back = backAfterPlay();
+                  finishActiveTask();
+                  setGameState(back);
+                }}
+                className="flex-1 btn-secondary py-2.5 text-sm"
+              >
+                🏠 Меню
+              </button>
             </div>
           </div>
         </div>

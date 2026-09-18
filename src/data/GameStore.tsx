@@ -5,6 +5,7 @@ import {
   commitDics,
   commitEvent,
   commitPhotos,
+  commitTasks,
   deviceId,
   emptyState,
   ensureCloudSeeded,
@@ -16,15 +17,28 @@ import {
   loadDics,
   loadImgbbApiKey,
   loadPhotos,
+  loadTasks,
   newId,
   peekCloudMeta,
   readLocalCache,
   saveBellSeen,
   saveImgbbApiKey,
   shuffleWordIds,
+  todayDayKey,
+  autoTasksForDay,
   type RoundDeck,
 } from "./cloud";
-import { START_HINTS, type DicAnswer, type DicReport, type GameEvent, type PhotoItem, type Settings, type SharedState } from "./types";
+import {
+  START_HINTS,
+  type DicAnswer,
+  type DicReport,
+  type GameEvent,
+  type PhotoItem,
+  type Settings,
+  type SharedState,
+  type TaskKind,
+  type TodayTask,
+} from "./types";
 import { gradePay } from "./modes";
 import { cacheImgbbKeyLocal } from "../photos";
 
@@ -54,6 +68,7 @@ type GameStoreValue = {
   deck: RoundDeck | null;
   photos: PhotoItem[];
   dics: DicReport[];
+  tasks: TodayTask[];
   bellSeenTs: number;
   refresh: () => Promise<void>;
   /** Время последнего meta.u из облака (мс). */
@@ -79,6 +94,10 @@ type GameStoreValue = {
   saveImgbbKey: (key: string) => Promise<void>;
   /** Подтянуть ключ ImgBB из облака в localStorage (для любого телефона). */
   pullImgbbKey: () => Promise<string>;
+  addTask: (input: { kind: TaskKind; title: string; reward: number; day?: string }) => Promise<TodayTask | null>;
+  removeTask: (id: string) => Promise<void>;
+  completeTask: (id: string) => Promise<void>;
+  seedAutoTasks: (replace?: boolean) => Promise<TodayTask[]>;
   resetProgress: (reason: string) => Promise<void>;
   saveSettings: (settings: Settings) => Promise<void>;
 };
@@ -90,6 +109,7 @@ export function GameStoreProvider({ children }: { children: ReactNode }) {
   const [deck, setDeck] = useState<RoundDeck | null>(null);
   const [photos, setPhotos] = useState<PhotoItem[]>([]);
   const [dics, setDics] = useState<DicReport[]>([]);
+  const [tasks, setTasks] = useState<TodayTask[]>([]);
   const [bellSeenTs, setBellSeenTs] = useState(0);
   const [ready, setReady] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -171,14 +191,16 @@ export function GameStoreProvider({ children }: { children: ReactNode }) {
           if (remote) adopt(remote);
           await pullDeck();
           try {
-            const [remotePhotos, remoteDics, seen, imgbb] = await Promise.all([
+            const [remotePhotos, remoteDics, remoteTasks, seen, imgbb] = await Promise.all([
               loadPhotos(),
               loadDics(),
+              loadTasks(),
               loadBellSeen(),
               loadImgbbApiKey(),
             ]);
             setPhotos(remotePhotos);
             setDics(remoteDics);
+            setTasks(remoteTasks);
             setBellSeenTs((prev) => Math.max(prev, seen));
             if (imgbb) cacheImgbbKeyLocal(imgbb);
           } catch {
@@ -218,15 +240,17 @@ export function GameStoreProvider({ children }: { children: ReactNode }) {
         if (!cancelled) adopt(remote);
         const remoteDeck = await loadDeck();
         if (!cancelled) adoptDeck(remoteDeck);
-        const [remotePhotos, remoteDics, seen, imgbb] = await Promise.all([
+        const [remotePhotos, remoteDics, remoteTasks, seen, imgbb] = await Promise.all([
           loadPhotos(),
           loadDics(),
+          loadTasks(),
           loadBellSeen(),
           loadImgbbApiKey(),
         ]);
         if (!cancelled) {
           setPhotos(remotePhotos);
           setDics(remoteDics);
+          setTasks(remoteTasks);
           setBellSeenTs((prev) => Math.max(prev, seen));
           if (imgbb) cacheImgbbKeyLocal(imgbb);
         }
@@ -669,6 +693,63 @@ export function GameStoreProvider({ children }: { children: ReactNode }) {
     return imgbb;
   }, []);
 
+  const addTask = useCallback(
+    async (input: { kind: TaskKind; title: string; reward: number; day?: string }) => {
+      const item: TodayTask = {
+        id: newId(),
+        day: input.day || todayDayKey(),
+        kind: input.kind,
+        title: (input.title || "Задание").trim().slice(0, 40),
+        reward: Math.trunc(input.reward) || 0,
+        status: "wait",
+      };
+      const saved = await commitTasks((current) => {
+        const sameDay = current.filter((row) => row.day === item.day);
+        const other = current.filter((row) => row.day !== item.day);
+        return [item, ...sameDay, ...other].slice(0, 8);
+      });
+      setTasks(saved);
+      return saved.find((row) => row.id === item.id) ?? item;
+    },
+    [],
+  );
+
+  const removeTask = useCallback(async (id: string) => {
+    const saved = await commitTasks((current) => current.filter((row) => row.id !== id));
+    setTasks(saved);
+  }, []);
+
+  const completeTask = useCallback(
+    async (id: string) => {
+      let reward = 0;
+      let title = "Задание";
+      const saved = await commitTasks((current) =>
+        current.map((row) => {
+          if (row.id !== id || row.status === "done") return row;
+          reward = row.reward;
+          title = row.title;
+          return { ...row, status: "done" as const };
+        }),
+      );
+      setTasks(saved);
+      if (reward > 0) await credit(reward, `Задание: ${title}`);
+      else if (reward < 0) await payout(Math.abs(reward), `Задание: ${title}`);
+    },
+    [credit, payout],
+  );
+
+  const seedAutoTasks = useCallback(async (replace = false) => {
+    const day = todayDayKey();
+    const saved = await commitTasks((current) => {
+      const others = current.filter((row) => row.day !== day);
+      const today = current.filter((row) => row.day === day);
+      if (today.length > 0 && !replace) return current;
+      return [...autoTasksForDay(day), ...others].slice(0, 8);
+    });
+    setTasks(saved);
+    return saved.filter((row) => row.day === day);
+  }, []);
+
   const resetProgress = useCallback(
     async (reason: string) => {
       const current = stateRef.current;
@@ -751,6 +832,7 @@ export function GameStoreProvider({ children }: { children: ReactNode }) {
       deck,
       photos,
       dics,
+      tasks,
       bellSeenTs,
       metaUpdatedAt,
       refresh,
@@ -771,6 +853,10 @@ export function GameStoreProvider({ children }: { children: ReactNode }) {
       markBellSeen,
       saveImgbbKey,
       pullImgbbKey,
+      addTask,
+      removeTask,
+      completeTask,
+      seedAutoTasks,
       resetProgress,
       saveSettings,
     }),
@@ -781,7 +867,9 @@ export function GameStoreProvider({ children }: { children: ReactNode }) {
       applyShop,
       addDicReport,
       addPhoto,
+      addTask,
       bellSeenTs,
+      completeTask,
       credit,
       deck,
       dics,
@@ -798,11 +886,14 @@ export function GameStoreProvider({ children }: { children: ReactNode }) {
       refresh,
       removeDic,
       removePhoto,
+      removeTask,
       resetProgress,
       saveImgbbKey,
       saveSettings,
+      seedAutoTasks,
       state,
       syncing,
+      tasks,
     ],
   );
 
