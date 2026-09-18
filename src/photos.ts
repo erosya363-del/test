@@ -28,8 +28,6 @@ export function cacheImgbbKeyLocal(key: string): void {
 
 /** Облако → localStorage → константа. Один ключ на семью. */
 export async function resolveImgbbKey(): Promise<string> {
-  const local = resolveImgbbKeySync();
-  if (local) return local;
   try {
     const fromCloud = (await loadImgbbApiKey()).trim();
     if (fromCloud) {
@@ -37,9 +35,9 @@ export async function resolveImgbbKey(): Promise<string> {
       return fromCloud;
     }
   } catch {
-    /* offline */
+    /* offline — ниже возьмём кэш телефона */
   }
-  return (IMGBB_API_KEY || "").trim();
+  return resolveImgbbKeySync() || (IMGBB_API_KEY || "").trim();
 }
 
 export function photoUploadReady(): boolean {

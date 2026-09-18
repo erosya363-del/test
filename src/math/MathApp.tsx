@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useGameStore } from "../data/GameStore";
 import { playClickSound, playCorrectSound, playWrongSound, playCoinSound, resumeAudio } from "../sounds";
 import { buildTableSession, buildTodaySession, buildTrainSession } from "./generate";
+import { applyOutcome, emptySessionStats, outcomeFromAttempts, withSimilarQueued } from "./session";
 import {
   MATH_HUB_CARDS,
   rewardFor,
@@ -368,14 +369,7 @@ function MathPlay({
   const [flash, setFlash] = useState<"ok" | "soft" | "hint" | "explain" | null>(null);
   const [hintShown, setHintShown] = useState(false);
   const [askHint, setAskHint] = useState(false);
-  const [stats, setStats] = useState<SessionStats>({
-    total: 0,
-    firstTry: 0,
-    retry: 0,
-    withHint: 0,
-    gaveUp: 0,
-    earned: 0,
-  });
+  const [stats, setStats] = useState<SessionStats>(emptySessionStats);
 
   const current = queue[index];
   const total = queue.length;
@@ -390,15 +384,7 @@ function MathPlay({
 
   const finishOutcome = async (outcome: AttemptOutcome) => {
     const pay = rewardFor(outcome);
-    const nextStats: SessionStats = {
-      ...stats,
-      total: stats.total + 1,
-      firstTry: stats.firstTry + (outcome === "first" ? 1 : 0),
-      retry: stats.retry + (outcome === "retry" ? 1 : 0),
-      withHint: stats.withHint + (outcome === "hint" ? 1 : 0),
-      gaveUp: stats.gaveUp + (outcome === "gave_up" ? 1 : 0),
-      earned: stats.earned + pay,
-    };
+    const nextStats = applyOutcome(stats, outcome);
     setStats(nextStats);
     if (pay > 0) {
       playCoinSound();
@@ -419,7 +405,7 @@ function MathPlay({
     if (value === current.answer) {
       playCorrectSound();
       setFlash("ok");
-      const outcome: AttemptOutcome = hintShown ? "hint" : attempts === 0 ? "first" : "retry";
+      const outcome = outcomeFromAttempts(attempts, hintShown);
       window.setTimeout(() => void finishOutcome(outcome), 700);
       return;
     }
@@ -436,19 +422,10 @@ function MathPlay({
       setFlash("soft");
       return;
     }
-    // 3-я ошибка — разбор + похожий
     setFlash("explain");
     window.setTimeout(() => {
       if (current.similar) {
-        const similar: MathExercise = {
-          ...current.similar,
-          id: `${current.id}_s`,
-        };
-        setQueue((q) => {
-          const copy = [...q];
-          copy.splice(index + 1, 0, similar);
-          return copy;
-        });
+        setQueue((q) => withSimilarQueued(q, index, current));
       }
       void finishOutcome("gave_up");
     }, 2200);
@@ -460,7 +437,7 @@ function MathPlay({
     if (op === current.answer) {
       playCorrectSound();
       setFlash("ok");
-      const outcome: AttemptOutcome = hintShown ? "hint" : attempts === 0 ? "first" : "retry";
+      const outcome = outcomeFromAttempts(attempts, hintShown);
       window.setTimeout(() => void finishOutcome(outcome), 700);
       return;
     }
