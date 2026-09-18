@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { speakRuTwice, stopSpeaking, warmVoices } from "./speech";
-import { photoUploadReady, uploadPhotoToImgbb } from "./photos";
+import { photoUploadReadyAsync, uploadPhotoToImgbb, friendlyNetworkError } from "./photos";
 import { answersMatch } from "./data/modes";
 import type { DicAnswer } from "./data/types";
 import { playClickSound, playCorrectSound, playWrongSound, resumeAudio } from "./sounds";
@@ -86,7 +86,7 @@ export function DictationGame({ words, onPaperDone, onUploadPhoto, onSendKeys, o
     setError("");
     setBusy(true);
     try {
-      if (!photoUploadReady()) {
+      if (!(await photoUploadReadyAsync())) {
         throw new Error("Нет ключа ImgBB. Папа вставит ключ в кабинете.");
       }
       const url = await uploadPhotoToImgbb(file);
@@ -94,7 +94,7 @@ export function DictationGame({ words, onPaperDone, onUploadPhoto, onSendKeys, o
       setNote("Фото у папы — можно проверить в кабинете");
       setPhase("done");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Не загрузилось");
+      setError(friendlyNetworkError(err, "Не загрузилось"));
     } finally {
       setBusy(false);
     }
@@ -108,7 +108,7 @@ export function DictationGame({ words, onPaperDone, onUploadPhoto, onSendKeys, o
       setNote("Отправлено папе");
       setPhase("done");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Не отправилось");
+      setError(friendlyNetworkError(err, "Не отправилось"));
     } finally {
       setBusy(false);
     }
@@ -354,12 +354,12 @@ export function PhotoUploadPanel({
                 setBusy(true);
                 setError("");
                 try {
-                  if (!photoUploadReady()) throw new Error("Нет ключа ImgBB в кабинете папы");
+                  if (!(await photoUploadReadyAsync())) throw new Error("Нет ключа ImgBB в кабинете папы");
                   const url = await uploadPhotoToImgbb(file);
                   await onUpload(url);
                   setOk(true);
                 } catch (err) {
-                  setError(err instanceof Error ? err.message : "Ошибка");
+                  setError(friendlyNetworkError(err, "Не загрузилось"));
                 } finally {
                   setBusy(false);
                 }

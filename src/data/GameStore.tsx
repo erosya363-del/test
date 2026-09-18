@@ -56,8 +56,10 @@ type GameStoreValue = {
   dics: DicReport[];
   bellSeenTs: number;
   refresh: () => Promise<void>;
-  /** Взять незавершённый раунд из облака или создать новый. */
-  ensureRound: (wordCount: number) => Promise<RoundDeck>;
+  /** Время последнего meta.u из облака (мс). */
+  metaUpdatedAt: number;
+  /** Взять незавершённый раунд из облака или создать новый. forceNew — всегда новая колода. */
+  ensureRound: (wordCount: number, opts?: { forceNew?: boolean }) => Promise<RoundDeck>;
   /** Обновить позицию (и порядок, если вставили повтор ошибки). */
   advanceRound: (pos: number, ids?: number[]) => Promise<RoundDeck | null>;
   applyAnswer: (input: AnswerInput) => Promise<void>;
@@ -75,6 +77,8 @@ type GameStoreValue = {
   removeDic: (id: string) => Promise<void>;
   markBellSeen: () => Promise<void>;
   saveImgbbKey: (key: string) => Promise<void>;
+  /** Подтянуть ключ ImgBB из облака в localStorage (для любого телефона). */
+  pullImgbbKey: () => Promise<string>;
   resetProgress: (reason: string) => Promise<void>;
   saveSettings: (settings: Settings) => Promise<void>;
 };
@@ -89,6 +93,7 @@ export function GameStoreProvider({ children }: { children: ReactNode }) {
   const [bellSeenTs, setBellSeenTs] = useState(0);
   const [ready, setReady] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [metaUpdatedAt, setMetaUpdatedAt] = useState(0);
   const stateRef = useRef(state);
   const deckRef = useRef(deck);
   const writeTail = useRef(Promise.resolve());
@@ -159,6 +164,8 @@ export function GameStoreProvider({ children }: { children: ReactNode }) {
         if (pendingWrites.current > 0) return;
         if (!silent) setSyncing(true);
         try {
+          const peek = await peekCloudMeta();
+          if (peek?.updatedAt) setMetaUpdatedAt(peek.updatedAt);
           const remote = (await loadCloud()) ?? (await loadCloudMetaState());
           if (pendingWrites.current > 0) return;
           if (remote) adopt(remote);
@@ -175,7 +182,13 @@ export function GameStoreProvider({ children }: { children: ReactNode }) {
             setBellSeenTs((prev) => Math.max(prev, seen));
             if (imgbb) cacheImgbbKeyLocal(imgbb);
           } catch {
-            /* photos optional */
+            /* photos optional — ключ всё равно пробуем отдельно */
+            try {
+              const imgbb = await loadImgbbApiKey();
+              if (imgbb) cacheImgbbKeyLocal(imgbb);
+            } catch {
+              /* offline */
+            }
           }
         } finally {
           if (!silent) setSyncing(false);
@@ -190,10 +203,18 @@ export function GameStoreProvider({ children }: { children: ReactNode }) {
     (async () => {
       try {
         // Сначала только meta — новый ярлык iPhone сразу видит общие деньги.
-        const quick = await loadCloudMetaState();
-        if (!cancelled && quick) adopt(quick);
+        const quickMeta = await peekCloudMeta();
+        if (!cancelled && quickMeta) {
+          setMetaUpdatedAt(quickMeta.updatedAt);
+          adopt({
+            ...emptyState(),
+            money: quickMeta.money,
+            hints: quickMeta.hints,
+            settings: quickMeta.settings,
+          });
+        }
 
-        const remote = (await loadCloud()) ?? quick ?? (await ensureCloudSeeded());
+        const remote = (await loadCloud()) ?? (await loadCloudMetaState()) ?? (await ensureCloudSeeded());
         if (!cancelled) adopt(remote);
         const remoteDeck = await loadDeck();
         if (!cancelled) adoptDeck(remoteDeck);
@@ -213,6 +234,7 @@ export function GameStoreProvider({ children }: { children: ReactNode }) {
         try {
           const peek = await peekCloudMeta();
           if (peek && !cancelled) {
+            setMetaUpdatedAt(peek.updatedAt);
             adopt({
               ...emptyState(),
               money: peek.money,
@@ -226,6 +248,13 @@ export function GameStoreProvider({ children }: { children: ReactNode }) {
         } catch {
           const cached = readLocalCache();
           if (cached && !cancelled) adopt(cached);
+        }
+        // Даже при сбое полной загрузки — ключ фото из облака (сын без ручного ввода).
+        try {
+          const imgbb = await loadImgbbApiKey();
+          if (!cancelled && imgbb) cacheImgbbKeyLocal(imgbb);
+        } catch {
+          /* offline */
         }
       } finally {
         if (!cancelled) setReady(true);
@@ -268,6 +297,7 @@ export function GameStoreProvider({ children }: { children: ReactNode }) {
       try {
         const [peek, remoteDeck] = await Promise.all([peekCloudMeta(), loadDeck()]);
         if (pendingWrites.current > 0) return;
+        if (peek?.updatedAt) setMetaUpdatedAt(peek.updatedAt);
         const now = stateRef.current;
         const moneyChanged = peek && (peek.money !== now.money || peek.hints !== now.hints);
         if (moneyChanged && peek) {
@@ -318,12 +348,13 @@ export function GameStoreProvider({ children }: { children: ReactNode }) {
   }, [adopt, adoptDeck, refresh]);
 
   const ensureRound = useCallback(
-    async (wordCount: number) => {
+    async (wordCount: number, opts?: { forceNew?: boolean }) => {
       pendingWrites.current += 1;
       setSyncing(true);
       try {
+        const forceNew = Boolean(opts?.forceNew);
         const saved = await commitDeck((current) => {
-          if (current && current.ids.length > 0 && current.pos < current.ids.length) {
+          if (!forceNew && current && current.ids.length > 0 && current.pos < current.ids.length) {
             return current;
           }
           const ids = shuffleWordIds(wordCount, 50);
@@ -632,6 +663,12 @@ export function GameStoreProvider({ children }: { children: ReactNode }) {
     await saveImgbbApiKey(trimmed);
   }, []);
 
+  const pullImgbbKey = useCallback(async () => {
+    const imgbb = await loadImgbbApiKey();
+    if (imgbb) cacheImgbbKeyLocal(imgbb);
+    return imgbb;
+  }, []);
+
   const resetProgress = useCallback(
     async (reason: string) => {
       const current = stateRef.current;
@@ -715,6 +752,7 @@ export function GameStoreProvider({ children }: { children: ReactNode }) {
       photos,
       dics,
       bellSeenTs,
+      metaUpdatedAt,
       refresh,
       ensureRound,
       advanceRound,
@@ -732,6 +770,7 @@ export function GameStoreProvider({ children }: { children: ReactNode }) {
       removeDic,
       markBellSeen,
       saveImgbbKey,
+      pullImgbbKey,
       resetProgress,
       saveSettings,
     }),
@@ -751,8 +790,10 @@ export function GameStoreProvider({ children }: { children: ReactNode }) {
       gradePhoto,
       logDictation,
       markBellSeen,
+      metaUpdatedAt,
       payout,
       photos,
+      pullImgbbKey,
       ready,
       refresh,
       removeDic,

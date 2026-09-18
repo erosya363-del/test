@@ -357,6 +357,11 @@ export function PapaCabinet({ onClose }: { onClose: () => void }) {
             </button>
           </div>
           <p className="text-white/60 text-sm mt-2">{store.syncing || busy ? "Сохраняем…" : "Общая база с любого телефона"}</p>
+          {store.metaUpdatedAt > 0 && (
+            <p className="text-white/40 text-xs mt-1">
+              Баланс в облаке: {store.money} ₽ · обновлено {formatTime(store.metaUpdatedAt)}
+            </p>
+          )}
         </div>
 
         {bellOpen && (
@@ -878,6 +883,9 @@ export function PapaCabinet({ onClose }: { onClose: () => void }) {
             <div className="glass-card w-full space-y-4">
               <p className="font-black text-lg">Ключ фото (ImgBB)</p>
               <p className="text-white/60 text-sm">Один ключ на семью: сохранил здесь — сын грузит фото с любого телефона. Сайт imgbb.com → раздел API.</p>
+              <p className="text-white/50 text-xs">
+                {imgbbKey.trim() ? "Ключ на этом телефоне есть · после «Сохранить» — в общей базе" : "Ключа пока нет — фото не загрузится"}
+              </p>
               <label className="block">
                 <span className="field-label">Ключ ImgBB</span>
                 <input
@@ -899,11 +907,12 @@ export function PapaCabinet({ onClose }: { onClose: () => void }) {
                     { title: "Сохраняем ключ…", tone: "wait", busy: true },
                     async () => {
                       await store.saveImgbbKey(imgbbKey);
-                      setImgbbKey(readImgbbKey());
+                      const pulled = await store.pullImgbbKey();
+                      setImgbbKey(pulled || readImgbbKey());
                     },
                     {
-                      title: imgbbKey.trim() ? "Ключ сохранён" : "Ключ очищен",
-                      message: imgbbKey.trim() ? "Сын сможет грузить фото" : undefined,
+                      title: imgbbKey.trim() ? "Ключ в общей базе" : "Ключ очищен",
+                      message: imgbbKey.trim() ? "Сын сможет грузить фото с любого телефона" : undefined,
                       tone: "ok",
                     },
                   );

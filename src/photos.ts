@@ -1,15 +1,18 @@
+import { loadImgbbApiKey } from "./data/cloud";
 import { IMGBB_API_KEY } from "./data/types";
 
 const LS_KEY = "dictation_imgbb";
 
-function resolveImgbbKey(): string {
+function readLocalKey(): string {
   try {
-    const fromLs = localStorage.getItem(LS_KEY)?.trim();
-    if (fromLs) return fromLs;
+    return localStorage.getItem(LS_KEY)?.trim() || "";
   } catch {
-    /* private mode */
+    return "";
   }
-  return (IMGBB_API_KEY || "").trim();
+}
+
+function resolveImgbbKeySync(): string {
+  return readLocalKey() || (IMGBB_API_KEY || "").trim();
 }
 
 /** Пишет ключ в localStorage (после загрузки из облака или сохранения папой). */
@@ -23,8 +26,47 @@ export function cacheImgbbKeyLocal(key: string): void {
   }
 }
 
+/** Облако → localStorage → константа. Один ключ на семью. */
+export async function resolveImgbbKey(): Promise<string> {
+  const local = resolveImgbbKeySync();
+  if (local) return local;
+  try {
+    const fromCloud = (await loadImgbbApiKey()).trim();
+    if (fromCloud) {
+      cacheImgbbKeyLocal(fromCloud);
+      return fromCloud;
+    }
+  } catch {
+    /* offline */
+  }
+  return (IMGBB_API_KEY || "").trim();
+}
+
 export function photoUploadReady(): boolean {
-  return Boolean(resolveImgbbKey());
+  return Boolean(resolveImgbbKeySync());
+}
+
+export async function photoUploadReadyAsync(): Promise<boolean> {
+  return Boolean(await resolveImgbbKey());
+}
+
+/** Safari часто пишет "Load failed" — переводим на русский. */
+export function friendlyNetworkError(err: unknown, fallback: string): string {
+  const raw = err instanceof Error ? err.message : String(err || "");
+  const lower = raw.toLowerCase();
+  if (!raw.trim()) return fallback;
+  if (
+    lower.includes("load failed") ||
+    lower.includes("failed to fetch") ||
+    lower.includes("networkerror") ||
+    lower.includes("network request failed") ||
+    lower.includes("the internet connection appears to be offline")
+  ) {
+    return "Сеть не ответила. Проверь интернет и попробуй ещё раз";
+  }
+  if (lower.includes("imgbb") || lower.includes("ключ")) return raw;
+  if (/[а-яё]/i.test(raw)) return raw;
+  return fallback;
 }
 
 /** Сжать фото для мобильного аплоада (макс. сторона 960px). */
@@ -78,7 +120,7 @@ function blobToBase64(blob: Blob): Promise<string> {
 
 /** Загрузка на ImgBB → публичный URL (виден с другого телефона). */
 export async function uploadPhotoToImgbb(file: File): Promise<string> {
-  const key = resolveImgbbKey();
+  const key = await resolveImgbbKey();
   if (!key) {
     throw new Error("Нет ключа ImgBB. Папа: кабинет → ключ фото");
   }
@@ -86,12 +128,17 @@ export async function uploadPhotoToImgbb(file: File): Promise<string> {
   const base64 = await blobToBase64(compressed);
   const body = new FormData();
   body.append("image", base64);
-  const response = await fetch(`https://api.imgbb.com/1/upload?key=${encodeURIComponent(key)}`, {
-    method: "POST",
-    body,
-  });
+  let response: Response;
+  try {
+    response = await fetch(`https://api.imgbb.com/1/upload?key=${encodeURIComponent(key)}`, {
+      method: "POST",
+      body,
+    });
+  } catch (err) {
+    throw new Error(friendlyNetworkError(err, "Не удалось отправить фото"));
+  }
   if (!response.ok) {
-    throw new Error("ImgBB не принял фото");
+    throw new Error("ImgBB не принял фото. Проверь ключ в кабинете папы");
   }
   const json = (await response.json()) as {
     success?: boolean;

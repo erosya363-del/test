@@ -15,6 +15,8 @@ import {
   type PlayMode,
 } from './data/modes';
 import { DictationGame, PhotoUploadPanel } from './DictationGame';
+import { shuffleWordIds } from './data/cloud';
+import { MathApp } from './math/MathApp';
 
 const a = '\u0301'; // combining acute accent
 
@@ -486,7 +488,9 @@ const WORDS: WordData[] = [
 
 type GameState =
   | 'splash'
+  | 'subjects'
   | 'menu'
+  | 'math'
   | 'levelPick'
   | 'shop'
   | 'pic'
@@ -556,7 +560,7 @@ function App() {
 
   useEffect(() => {
     if (gameState !== 'splash' || !ready) return;
-    const timer = setTimeout(() => setGameState('menu'), 700);
+    const timer = setTimeout(() => setGameState('subjects'), 700);
     return () => clearTimeout(timer);
   }, [gameState, ready]);
 
@@ -678,21 +682,16 @@ function App() {
     setWriteDraft('');
 
     if (mode === 'dictation') {
-      try {
-        const round = await store.ensureRound(WORDS.length);
-        const slice = round.ids.slice(0, 10).map((id) => WORDS[id]).filter(Boolean);
-        setDictWords(slice.length ? slice : WORDS.slice(0, 10));
-      } catch {
-        setDictWords(
-          [...WORDS].sort(() => Math.random() - 0.5).slice(0, 10),
-        );
-      }
+      // Свой набор каждый раз — не берём ids.slice(0,10) из общей колоды Глаза.
+      const ids = shuffleWordIds(WORDS.length, 10);
+      const slice = ids.map((id) => WORDS[id]).filter(Boolean);
+      setDictWords(slice.length ? slice : [...WORDS].sort(() => Math.random() - 0.5).slice(0, 10));
       setGameState('dictation');
       return;
     }
 
     try {
-      const round = await store.ensureRound(WORDS.length);
+      const round = await store.ensureRound(WORDS.length, { forceNew: true });
       applyRoundLocally(round.ids, round.pos, true, mode);
       if (mode === 'listen') setGameState('listen');
       else if (level === 1) setGameState('pic');
@@ -1184,6 +1183,8 @@ function App() {
 
       {/* Top HUD — только во время раунда слов, не на меню/диктанте/выборе */}
       {gameState !== 'menu' &&
+        gameState !== 'subjects' &&
+        gameState !== 'math' &&
         gameState !== 'shop' &&
         gameState !== 'final' &&
         gameState !== 'levelPick' &&
@@ -1219,6 +1220,85 @@ function App() {
         </div>
       )}
 
+      {/* ============ SUBJECTS ============ */}
+      {gameState === 'subjects' && (
+        <div className="app-screen relative">
+          <div className="text-center mb-4 animate-fade-in-up">
+            <div className="relative inline-block mb-3">
+              <div className="text-7xl animate-float">🎮</div>
+            </div>
+            <h1 className="text-4xl font-black mb-2">
+              <span className="bg-gradient-to-r from-yellow-200 via-pink-200 to-purple-200 bg-clip-text text-transparent">
+                Диктант Квест
+              </span>
+            </h1>
+            <p className="text-base text-purple-200/80 font-medium">2 класс · выбери предмет</p>
+          </div>
+
+          <div className="glass-card w-full animate-fade-in-up space-y-3" style={{ animationDelay: '0.1s' }}>
+            <div className="bg-white/5 rounded-2xl p-3 border border-white/10">
+              <div className="flex justify-between items-center">
+                <div>
+                  <p className="text-xs text-white/50">Баланс</p>
+                  <p className="text-xl font-black text-yellow-300">{ready ? `${money} ₽` : '…'}</p>
+                </div>
+                <div className="w-px h-8 bg-white/10" />
+                <div className="text-center">
+                  <p className="text-xs text-white/50">Подсказки</p>
+                  <p className="text-xl font-black text-blue-300">{ready ? `${hints} 💡` : '…'}</p>
+                </div>
+              </div>
+              <p className="text-[11px] text-white/40 mt-2 text-center">
+                {syncing ? 'Сохраняем…' : 'Один баланс на все предметы'}
+              </p>
+            </div>
+
+            <button
+              type="button"
+              className="w-full glass-card !p-5 text-left active:scale-[0.98] transition-transform border border-white/10"
+              onClick={() => {
+                playClickSound();
+                setGameState('menu');
+              }}
+            >
+              <div className="text-4xl mb-2">📝</div>
+              <p className="font-black text-xl">Русский язык</p>
+              <p className="text-white/55 text-sm mt-1">Глаз · Слух · Ударение · Буквы · Диктант</p>
+            </button>
+
+            <button
+              type="button"
+              className="w-full glass-card !p-5 text-left active:scale-[0.98] transition-transform border border-white/10"
+              onClick={() => {
+                playClickSound();
+                setGameState('math');
+              }}
+            >
+              <div className="text-4xl mb-2">🧮</div>
+              <p className="font-black text-xl">Математика</p>
+              <p className="text-white/55 text-sm mt-1">Примеры · Сравнение · Таблица · Задачи</p>
+            </button>
+          </div>
+
+          <div className="mt-3 w-full space-y-2">
+            <button
+              type="button"
+              className="w-full btn-secondary play-cta"
+              onClick={() => {
+                playClickSound();
+                openCabinet();
+              }}
+            >
+              🔐 Кабинет папы
+            </button>
+          </div>
+        </div>
+      )}
+
+      {gameState === 'math' && (
+        <MathApp onBackToSubjects={() => setGameState('subjects')} />
+      )}
+
       {/* ============ MENU ============ */}
       {gameState === 'menu' && (
         <div className="app-screen relative">
@@ -1233,7 +1313,7 @@ function App() {
               </span>
             </h1>
             <p className="text-base text-purple-200/80 font-medium">
-              1 класс • {WORDS.length} слов
+              2 класс • {WORDS.length} слов
             </p>
           </div>
 
@@ -1300,8 +1380,18 @@ function App() {
             <button onClick={() => { resumeAudio(); playClickSound(); setGameState('shop'); }} className="w-full btn-secondary text-sm py-2.5 mb-2">
               🛒 Магазин
             </button>
-            <button onClick={() => { playClickSound(); openCabinet(); }} className="w-full btn-secondary text-sm py-2.5">
+            <button onClick={() => { playClickSound(); openCabinet(); }} className="w-full btn-secondary text-sm py-2.5 mb-2">
               🔐 Кабинет папы
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                playClickSound();
+                setGameState('subjects');
+              }}
+              className="w-full btn-secondary text-sm py-2.5"
+            >
+              ← К предметам
             </button>
           </div>
         </div>
