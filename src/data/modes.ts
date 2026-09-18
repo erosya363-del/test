@@ -17,7 +17,7 @@ export const PLAY_MODES: {
   { id: "listen", emoji: "🔊", title: "Слух", desc: "Слушай и выбери написание" },
   { id: "stress", emoji: "🎵", title: "Ударение", desc: "Только ударения", needsLevel: true },
   { id: "letter", emoji: "🔤", title: "Буквы", desc: "Только буквы", needsLevel: true },
-  { id: "dictation", emoji: "📝", title: "Диктант 10", desc: "Диктует 10 слов · фото папе" },
+  { id: "dictation", emoji: "📝", title: "Диктант 10", desc: "На бумаге или с клавиатуры" },
 ];
 
 export const DIFFICULTY_LEVELS: {

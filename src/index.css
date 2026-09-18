@@ -266,6 +266,70 @@
   transform: scale(0.9);
 }
 
+/* ===== iOS grade pills (1–5) ===== */
+.ios-grade-row {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 4px 0;
+}
+
+.ios-grade-btn {
+  width: 48px;
+  height: 48px;
+  min-width: 48px;
+  min-height: 48px;
+  border-radius: 999px;
+  border: 1.5px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.ios-grade-btn:active {
+  transform: scale(0.92);
+}
+
+.ios-grade-btn.is-on {
+  color: #fff;
+  border-color: transparent;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.12);
+}
+
+.ios-grade-btn.is-on.g1 {
+  background: linear-gradient(180deg, #ff5a5f 0%, #e11d48 100%);
+}
+.ios-grade-btn.is-on.g2 {
+  background: linear-gradient(180deg, #ff9f43 0%, #ea580c 100%);
+}
+.ios-grade-btn.is-on.g3 {
+  background: linear-gradient(180deg, #94a3b8 0%, #64748b 100%);
+}
+.ios-grade-btn.is-on.g4 {
+  background: linear-gradient(180deg, #38bdf8 0%, #0284c7 100%);
+}
+.ios-grade-btn.is-on.g5 {
+  background: linear-gradient(180deg, #34d399 0%, #059669 100%);
+}
+
+.ios-grade-hint {
+  text-align: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.55);
+  margin-top: 2px;
+}
+
 /* ===== BUTTONS ===== */
 
 .btn-primary {

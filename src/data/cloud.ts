@@ -3,6 +3,8 @@ import {
   DEFAULT_SETTINGS,
   START_BALANCE,
   START_HINTS,
+  type DicAnswer,
+  type DicReport,
   type EventKind,
   type GameEvent,
   type PhotoItem,
@@ -21,6 +23,7 @@ const DECK_KEY = "deck";
 const PHOTOS_KEY = "photos";
 const BELL_KEY = "bell";
 const IMGBB_KEY = "imgbb";
+const DICS_KEY = "dics";
 const LOG_KEYS = ["l0", "l1", "l2", "l3", "l4", "l5", "l6", "l7"] as const;
 const EVENTS_PER_LOG = 8;
 /** Пустой слот: API не любит пустую строку, а "-" раньше ломал разбор. */
@@ -826,6 +829,104 @@ export async function loadImgbbApiKey(): Promise<string> {
 export async function saveImgbbApiKey(key: string): Promise<void> {
   const trimmed = key.trim();
   await cloudSet(IMGBB_KEY, trimmed ? hexEncode(trimmed) : EMPTY_SLOT);
+}
+
+function encodeDicAnswers(answers: DicAnswer[]): string {
+  const compact = answers
+    .map((row) => `${row.word.replace(/[,;]/g, "")},${row.input.replace(/[,;]/g, "")},${row.ok ? 1 : 0}`)
+    .join(";");
+  return hexEncode(compact);
+}
+
+function decodeDicAnswers(hex: string): DicAnswer[] {
+  const raw = hexDecode(hex);
+  if (!raw) return [];
+  const out: DicAnswer[] = [];
+  for (const part of raw.split(";")) {
+    if (!part) continue;
+    const [word, input, okRaw] = part.split(",");
+    if (!word) continue;
+    out.push({ word, input: input || "", ok: okRaw === "1" });
+  }
+  return out;
+}
+
+export function encodeDics(items: DicReport[]): string {
+  const newest = [...items].filter((item) => item.status !== "gone").sort((a, b) => b.ts - a.ts);
+  const parts: string[] = [];
+  for (const item of newest) {
+    const row = `${item.id}_${item.ts}_${statusToCode(item.status)}_${Math.max(0, item.grade)}_${item.ok}_${item.total}_${encodeDicAnswers(item.answers)}`;
+    const next = parts.length ? `${parts.join("|")}|${row}` : row;
+    if (next.length > 1000) {
+      if (parts.length === 0) throw new Error("Диктант слишком длинный для облака");
+      break;
+    }
+    parts.push(row);
+  }
+  return parts.join("|");
+}
+
+export function decodeDics(raw: string): DicReport[] {
+  if (isEmptySlot(raw)) return [];
+  const out: DicReport[] = [];
+  for (const part of raw.split("|")) {
+    const chunks = part.split("_");
+    if (chunks.length < 7) continue;
+    const [id, tsRaw, st, gradeRaw, okRaw, totalRaw, ...ansParts] = chunks;
+    const answers = decodeDicAnswers(ansParts.join("_"));
+    if (!id) continue;
+    out.push({
+      id,
+      ts: Number(tsRaw) || 0,
+      status: codeToStatus(st),
+      grade: Number(gradeRaw) || 0,
+      ok: Number(okRaw) || 0,
+      total: Number(totalRaw) || answers.length,
+      answers,
+    });
+  }
+  return out.sort((a, b) => b.ts - a.ts);
+}
+
+export async function loadDics(): Promise<DicReport[]> {
+  try {
+    return decodeDics(await cloudGet(DICS_KEY));
+  } catch {
+    return [];
+  }
+}
+
+export async function saveDics(items: DicReport[]): Promise<void> {
+  const packed = encodeDics(items);
+  await cloudSet(DICS_KEY, packed || EMPTY_SLOT);
+}
+
+export async function commitDics(
+  mutate: (current: DicReport[]) => DicReport[],
+): Promise<DicReport[]> {
+  let lastError: unknown;
+  const owner = `dic_${newId()}`;
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    try {
+      const locked = await acquireCloudLock(owner);
+      if (!locked) {
+        await new Promise((resolve) => setTimeout(resolve, 100 + attempt * 70));
+        continue;
+      }
+      try {
+        const current = await loadDics();
+        const next = mutate(current);
+        await saveDics(next);
+        return await loadDics();
+      } finally {
+        await releaseCloudLock(owner);
+      }
+    } catch (error) {
+      lastError = error;
+      await new Promise((resolve) => setTimeout(resolve, 120 + attempt * 80));
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("Не удалось сохранить диктант");
 }
 
 /** Экспорт для юнит-доказательств без сети. */

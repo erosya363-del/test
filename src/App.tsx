@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { playCorrectSound, playWrongSound, playCoinSound, playClickSound, playShowSound, resumeAudio } from './sounds';
-import { speakRu, stopSpeaking, canSpeak } from './speech';
+import { speakRu, stopSpeaking, canSpeak, warmVoices } from './speech';
 import { PapaCabinet } from './admin/PapaCabinet';
 import { useGameStore } from './data/GameStore';
 import { EXTRA_WORDS } from './data/vocabExtra';
@@ -537,6 +537,10 @@ function App() {
   const [pendingMode, setPendingMode] = useState<PlayMode>('eye');
   const [writeDraft, setWriteDraft] = useState('');
   const [dictWords, setDictWords] = useState<WordData[]>([]);
+
+  useEffect(() => {
+    warmVoices();
+  }, []);
 
   useEffect(() => {
     const onHash = () => setCabinetOpen(window.location.hash === '#papa');
@@ -1334,11 +1338,14 @@ function App() {
       {gameState === 'dictation' && (
         <DictationGame
           words={dictWords}
-          onFinished={(okCount, total) => {
-            void store.logDictation(okCount, total);
+          onPaperDone={() => {
+            void store.logDictation(0, dictWords.length || 10, 'paper');
           }}
           onUploadPhoto={async (url) => {
-            await store.addPhoto(url, 'После диктанта');
+            await store.addPhoto(url, 'Диктант на бумаге');
+          }}
+          onSendKeys={async (answers) => {
+            await store.addDicReport(answers);
           }}
           onBack={() => {
             stopSpeaking();

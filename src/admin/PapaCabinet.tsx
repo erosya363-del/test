@@ -57,9 +57,37 @@ function digitsOnly(raw: string): string {
   return String(parseInt(digits, 10));
 }
 
+/** Цифры со знаком минус — для оценок 1–2. */
+function signedDigitsOnly(raw: string): string {
+  const neg = raw.trim().startsWith("-");
+  const digits = raw.replace(/\D/g, "");
+  if (!digits) return neg ? "-" : "";
+  return `${neg ? "-" : ""}${String(parseInt(digits, 10))}`;
+}
+
 function moneyFromDraft(raw: string): number {
   const n = parseInt(digitsOnly(raw), 10);
   return Number.isFinite(n) ? Math.max(0, n) : 0;
+}
+
+function signedMoneyFromDraft(raw: string): number {
+  const n = parseInt(signedDigitsOnly(raw), 10);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function formatPay(pay: number): string {
+  if (pay > 0) return `+${pay} ₽`;
+  if (pay < 0) return `${pay} ₽`;
+  return "0 ₽";
+}
+
+function gradeHint(grade: number): string {
+  if (grade === 1) return "кол";
+  if (grade === 2) return "двойка";
+  if (grade === 3) return "нейтрально";
+  if (grade === 4) return "хорошо";
+  if (grade === 5) return "отлично";
+  return "";
 }
 
 function settingsToDraft(settings: Settings) {
@@ -200,8 +228,10 @@ export function PapaCabinet({ onClose }: { onClose: () => void }) {
   );
 
   const waitingPhotos = useMemo(
-    () => store.photos.filter((photo) => photo.status === "wait").length,
-    [store.photos],
+    () =>
+      store.photos.filter((photo) => photo.status === "wait").length +
+      store.dics.filter((dic) => dic.status === "wait").length,
+    [store.photos, store.dics],
   );
 
   const login = (event: FormEvent) => {
@@ -258,11 +288,11 @@ export function PapaCabinet({ onClose }: { onClose: () => void }) {
     letterPenaltyWrong: moneyFromDraft(draft.letterPenaltyWrong),
     hintPrice: moneyFromDraft(draft.hintPrice),
     hintPackPrice: moneyFromDraft(draft.hintPackPrice),
-    grade1: moneyFromDraft(draft.grade1),
-    grade2: moneyFromDraft(draft.grade2),
-    grade3: moneyFromDraft(draft.grade3),
-    grade4: moneyFromDraft(draft.grade4),
-    grade5: moneyFromDraft(draft.grade5),
+    grade1: signedMoneyFromDraft(draft.grade1),
+    grade2: signedMoneyFromDraft(draft.grade2),
+    grade3: signedMoneyFromDraft(draft.grade3),
+    grade4: signedMoneyFromDraft(draft.grade4),
+    grade5: signedMoneyFromDraft(draft.grade5),
   });
 
   const openBell = () => {
@@ -466,90 +496,160 @@ export function PapaCabinet({ onClose }: { onClose: () => void }) {
         {tab === "photo" && (
           <div className="w-full space-y-3">
             <div className="glass-card w-full space-y-2">
-              <p className="font-black text-lg">Фото на проверку</p>
-              <p className="text-white/60 text-sm">Оценка 1–5 начисляет деньги по ценам из настроек.</p>
+              <p className="font-black text-lg">На проверку</p>
+              <p className="text-white/60 text-sm">Фото с бумаги и диктанты с клавиатуры. Оценка 1–5.</p>
               {!photoUploadReady() && (
-                <p className="text-orange-300 text-sm">Ключ ImgBB ещё не задан — сын не сможет грузить фото. Вкладка ⚙️.</p>
+                <p className="text-orange-300 text-sm">Ключ ImgBB ещё не задан — фото с бумаги не загрузится. Вкладка ⚙️.</p>
               )}
             </div>
-            {store.photos.length === 0 ? (
-              <div className="glass-card w-full">
-                <p className="text-white/50">Пока нет загрузок.</p>
-              </div>
-            ) : (
-              store.photos.map((photo) => {
-                const pick = gradePick[photo.id] ?? (photo.grade || 5);
-                const pay = gradePay(store.settings, pick);
-                return (
-                  <div key={photo.id} className="glass-card w-full space-y-3">
-                    <div className="flex justify-between gap-2 items-start">
-                      <div>
-                        <p className="font-black">{photoStatusLabel(photo.status)}</p>
-                        <p className="text-white/40 text-sm">{formatTime(photo.ts)}</p>
-                        {photo.note && <p className="text-white/60 text-sm">{photo.note}</p>}
-                      </div>
-                      {photo.status === "done" && (
-                        <p className="text-yellow-300 font-black">{photo.grade}/5</p>
-                      )}
+
+            {store.dics.map((dic) => {
+              const pick = gradePick[dic.id] ?? (dic.grade || 5);
+              const pay = gradePay(store.settings, pick);
+              const mistakes = dic.answers.filter((row) => !row.ok);
+              return (
+                <div key={dic.id} className="glass-card w-full space-y-3">
+                  <div className="flex justify-between gap-2 items-start">
+                    <div>
+                      <p className="font-black">⌨️ Диктант · {photoStatusLabel(dic.status)}</p>
+                      <p className="text-white/40 text-sm">{formatTime(dic.ts)}</p>
+                      <p className="text-yellow-300 font-black text-sm mt-1">
+                        {dic.ok}/{dic.total} верно
+                      </p>
                     </div>
-                    <a href={photo.url} target="_blank" rel="noreferrer" className="block">
-                      <img
-                        src={photo.url}
-                        alt="Фото тетради"
-                        className="w-full max-h-56 object-contain rounded-2xl bg-black/30 border border-white/10"
-                      />
-                    </a>
-                    {photo.status === "wait" && (
-                      <>
-                        <div className="flex gap-2 flex-wrap">
-                          {[1, 2, 3, 4, 5].map((g) => (
-                            <button
-                              key={g}
-                              type="button"
-                              className={pick === g ? "btn-primary px-3 py-2" : "btn-secondary px-3 py-2"}
-                              onClick={() => setGradePick((prev) => ({ ...prev, [photo.id]: g }))}
-                            >
-                              {g}
-                            </button>
-                          ))}
-                        </div>
-                        <button
-                          type="button"
-                          className="w-full btn-primary play-cta"
-                          disabled={busy}
-                          onClick={() => {
-                            void runAction(
-                              { title: "Начисляем…", message: `Оценка ${pick} · +${pay} ₽`, tone: "wait", busy: true },
-                              async () => {
-                                await store.gradePhoto(photo.id, pick);
-                              },
-                              { title: "Оценено", message: `+${pay} ₽ на баланс`, tone: "ok" },
-                            );
-                          }}
-                        >
-                          Начислить +{pay} ₽
-                        </button>
-                      </>
+                    {dic.status === "done" && (
+                      <p className="text-yellow-300 font-black">{dic.grade}/5</p>
                     )}
-                    <button
-                      type="button"
-                      className="w-full btn-danger py-2.5"
-                      disabled={busy}
-                      onClick={() => {
-                        void runAction(
-                          { title: "Удаляем…", tone: "wait", busy: true },
-                          async () => {
-                            await store.removePhoto(photo.id);
-                          },
-                          { title: "Удалено", message: "Запись снята из облака", tone: "ok" },
-                        );
-                      }}
-                    >
-                      Удалить запись
-                    </button>
                   </div>
-                );
-              })
+                  {mistakes.length > 0 ? (
+                    <div className="space-y-2">
+                      <p className="text-white/60 text-sm">Ошибки</p>
+                      {mistakes.map((row) => (
+                        <div key={`${dic.id}-${row.word}`} className="bg-white/5 rounded-2xl p-3 border border-white/10">
+                          <p className="font-black">{row.word}</p>
+                          <p className="text-red-300 text-sm">Написал: {row.input || "—"}</p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-green-300 text-sm">Без ошибок</p>
+                  )}
+                  {dic.status === "wait" && (
+                    <>
+                      <GradePicker
+                        value={pick}
+                        onChange={(g) => setGradePick((prev) => ({ ...prev, [dic.id]: g }))}
+                        settings={store.settings}
+                      />
+                      <button
+                        type="button"
+                        className="w-full btn-primary play-cta"
+                        disabled={busy}
+                        onClick={() => {
+                          void runAction(
+                            { title: "Сохраняем…", message: `Оценка ${pick} · ${formatPay(pay)}`, tone: "wait", busy: true },
+                            async () => {
+                              await store.gradeDic(dic.id, pick);
+                            },
+                            { title: "Оценено", message: formatPay(pay), tone: "ok" },
+                          );
+                        }}
+                      >
+                        Поставить {pick} · {formatPay(pay)}
+                      </button>
+                    </>
+                  )}
+                  <button
+                    type="button"
+                    className="w-full btn-danger py-2.5"
+                    disabled={busy}
+                    onClick={() => {
+                      void runAction(
+                        { title: "Удаляем…", tone: "wait", busy: true },
+                        async () => {
+                          await store.removeDic(dic.id);
+                        },
+                        { title: "Удалено", tone: "ok" },
+                      );
+                    }}
+                  >
+                    Удалить запись
+                  </button>
+                </div>
+              );
+            })}
+
+            {store.photos.map((photo) => {
+              const pick = gradePick[photo.id] ?? (photo.grade || 5);
+              const pay = gradePay(store.settings, pick);
+              return (
+                <div key={photo.id} className="glass-card w-full space-y-3">
+                  <div className="flex justify-between gap-2 items-start">
+                    <div>
+                      <p className="font-black">📷 Фото · {photoStatusLabel(photo.status)}</p>
+                      <p className="text-white/40 text-sm">{formatTime(photo.ts)}</p>
+                      {photo.note && <p className="text-white/60 text-sm">{photo.note}</p>}
+                    </div>
+                    {photo.status === "done" && (
+                      <p className="text-yellow-300 font-black">{photo.grade}/5</p>
+                    )}
+                  </div>
+                  <a href={photo.url} target="_blank" rel="noreferrer" className="block">
+                    <img
+                      src={photo.url}
+                      alt="Фото тетради"
+                      className="w-full max-h-56 object-contain rounded-2xl bg-black/30 border border-white/10"
+                    />
+                  </a>
+                  {photo.status === "wait" && (
+                    <>
+                      <GradePicker
+                        value={pick}
+                        onChange={(g) => setGradePick((prev) => ({ ...prev, [photo.id]: g }))}
+                        settings={store.settings}
+                      />
+                      <button
+                        type="button"
+                        className="w-full btn-primary play-cta"
+                        disabled={busy}
+                        onClick={() => {
+                          void runAction(
+                            { title: "Сохраняем…", message: `Оценка ${pick} · ${formatPay(pay)}`, tone: "wait", busy: true },
+                            async () => {
+                              await store.gradePhoto(photo.id, pick);
+                            },
+                            { title: "Оценено", message: formatPay(pay), tone: "ok" },
+                          );
+                        }}
+                      >
+                        Поставить {pick} · {formatPay(pay)}
+                      </button>
+                    </>
+                  )}
+                  <button
+                    type="button"
+                    className="w-full btn-danger py-2.5"
+                    disabled={busy}
+                    onClick={() => {
+                      void runAction(
+                        { title: "Удаляем…", tone: "wait", busy: true },
+                        async () => {
+                          await store.removePhoto(photo.id);
+                        },
+                        { title: "Удалено", message: "Запись снята из облака", tone: "ok" },
+                      );
+                    }}
+                  >
+                    Удалить запись
+                  </button>
+                </div>
+              );
+            })}
+
+            {store.photos.length === 0 && store.dics.length === 0 && (
+              <div className="glass-card w-full">
+                <p className="text-white/50">Пока нет загрузок и диктантов.</p>
+              </div>
             )}
           </div>
         )}
@@ -731,12 +831,12 @@ export function PapaCabinet({ onClose }: { onClose: () => void }) {
               )}
               {rewardTab === "grade" && (
                 <>
-                  <p className="text-white/60 text-sm">Сколько ₽ за оценку фото 1–5</p>
-                  <MoneyField label="Оценка 1, ₽" value={draft.grade1} onChange={(value) => patchDraft({ grade1: value })} />
-                  <MoneyField label="Оценка 2, ₽" value={draft.grade2} onChange={(value) => patchDraft({ grade2: value })} />
-                  <MoneyField label="Оценка 3, ₽" value={draft.grade3} onChange={(value) => patchDraft({ grade3: value })} />
-                  <MoneyField label="Оценка 4, ₽" value={draft.grade4} onChange={(value) => patchDraft({ grade4: value })} />
-                  <MoneyField label="Оценка 5, ₽" value={draft.grade5} onChange={(value) => patchDraft({ grade5: value })} />
+                  <p className="text-white/60 text-sm">Минус для 1–2, ноль для 3, плюс для 4–5. Можно писать −20.</p>
+                  <SignedMoneyField label="1 кол, ₽" value={draft.grade1} onChange={(value) => patchDraft({ grade1: value })} />
+                  <SignedMoneyField label="2 двойка, ₽" value={draft.grade2} onChange={(value) => patchDraft({ grade2: value })} />
+                  <SignedMoneyField label="3 нейтрально, ₽" value={draft.grade3} onChange={(value) => patchDraft({ grade3: value })} />
+                  <SignedMoneyField label="4 хорошо, ₽" value={draft.grade4} onChange={(value) => patchDraft({ grade4: value })} />
+                  <SignedMoneyField label="5 отлично, ₽" value={draft.grade5} onChange={(value) => patchDraft({ grade5: value })} />
                 </>
               )}
 
@@ -869,6 +969,37 @@ export function PapaCabinet({ onClose }: { onClose: () => void }) {
   );
 }
 
+function GradePicker({
+  value,
+  onChange,
+  settings,
+}: {
+  value: number;
+  onChange: (grade: number) => void;
+  settings: Settings;
+}) {
+  return (
+    <div>
+      <div className="ios-grade-row" role="group" aria-label="Оценка">
+        {[1, 2, 3, 4, 5].map((g) => (
+          <button
+            key={g}
+            type="button"
+            className={`ios-grade-btn g${g}${value === g ? " is-on" : ""}`}
+            aria-pressed={value === g}
+            onClick={() => onChange(g)}
+          >
+            {g}
+          </button>
+        ))}
+      </div>
+      <p className="ios-grade-hint">
+        {gradeHint(value)} · {formatPay(gradePay(settings, value))}
+      </p>
+    </div>
+  );
+}
+
 function MoneyField({
   label,
   value,
@@ -893,6 +1024,35 @@ function MoneyField({
         onBlur={() => {
           if (value === "") onChange("0");
           else onChange(digitsOnly(value));
+        }}
+      />
+    </label>
+  );
+}
+
+function SignedMoneyField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="block papa-field">
+      <span className="field-label">{label}</span>
+      <input
+        className="game-input"
+        type="text"
+        inputMode="text"
+        autoComplete="off"
+        enterKeyHint="done"
+        value={value}
+        onChange={(event) => onChange(signedDigitsOnly(event.target.value))}
+        onBlur={() => {
+          if (value === "" || value === "-") onChange("0");
+          else onChange(signedDigitsOnly(value));
         }}
       />
     </label>

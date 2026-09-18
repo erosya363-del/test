@@ -75,6 +75,23 @@ export type PhotoItem = {
   note?: string;
 };
 
+/** Результат диктанта с клавиатуры — папа видит ошибки и ставит оценку. */
+export type DicAnswer = {
+  word: string;
+  input: string;
+  ok: boolean;
+};
+
+export type DicReport = {
+  id: string;
+  ts: number;
+  status: PhotoStatus;
+  grade: number;
+  ok: number;
+  total: number;
+  answers: DicAnswer[];
+};
+
 export type SharedState = {
   money: number;
   hints: number;
@@ -100,11 +117,12 @@ export const DEFAULT_SETTINGS: Settings = {
   letterPenaltyWrong: 3,
   hintPrice: 15,
   hintPackPrice: 40,
-  grade1: 10,
-  grade2: 25,
-  grade3: 40,
-  grade4: 60,
-  grade5: 100,
+  /** 1 кол / 2 двойка = минус; 3 = 0; 4–5 = плюс */
+  grade1: -20,
+  grade2: -10,
+  grade3: 0,
+  grade4: 20,
+  grade5: 30,
   parentPassword: "654321",
 };
 

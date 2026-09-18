@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import {
   cacheLocal,
   commitDeck,
+  commitDics,
   commitEvent,
   commitPhotos,
   deviceId,
@@ -12,6 +13,7 @@ import {
   loadCloud,
   loadCloudMetaState,
   loadDeck,
+  loadDics,
   loadImgbbApiKey,
   loadPhotos,
   newId,
@@ -22,7 +24,7 @@ import {
   shuffleWordIds,
   type RoundDeck,
 } from "./cloud";
-import { START_HINTS, type GameEvent, type PhotoItem, type Settings, type SharedState } from "./types";
+import { START_HINTS, type DicAnswer, type DicReport, type GameEvent, type PhotoItem, type Settings, type SharedState } from "./types";
 import { gradePay } from "./modes";
 import { cacheImgbbKeyLocal } from "../photos";
 
@@ -51,6 +53,7 @@ type GameStoreValue = {
   /** Общая колода раунда (null — ещё не подтянули / сброшена). */
   deck: RoundDeck | null;
   photos: PhotoItem[];
+  dics: DicReport[];
   bellSeenTs: number;
   refresh: () => Promise<void>;
   /** Взять незавершённый раунд из облака или создать новый. */
@@ -63,10 +66,13 @@ type GameStoreValue = {
   payout: (amount: number, reason: string) => Promise<void>;
   /** Начислить деньги сыну (заслуга и т.п.). */
   credit: (amount: number, reason: string) => Promise<void>;
-  logDictation: (okCount: number, total: number) => Promise<void>;
+  logDictation: (okCount: number, total: number, kind?: "paper" | "keys") => Promise<void>;
   addPhoto: (url: string, note?: string) => Promise<PhotoItem | null>;
   gradePhoto: (id: string, grade: number) => Promise<void>;
   removePhoto: (id: string) => Promise<void>;
+  addDicReport: (answers: DicAnswer[]) => Promise<DicReport | null>;
+  gradeDic: (id: string, grade: number) => Promise<void>;
+  removeDic: (id: string) => Promise<void>;
   markBellSeen: () => Promise<void>;
   saveImgbbKey: (key: string) => Promise<void>;
   resetProgress: (reason: string) => Promise<void>;
@@ -79,6 +85,7 @@ export function GameStoreProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<SharedState>(() => readLocalCache() ?? emptyState());
   const [deck, setDeck] = useState<RoundDeck | null>(null);
   const [photos, setPhotos] = useState<PhotoItem[]>([]);
+  const [dics, setDics] = useState<DicReport[]>([]);
   const [bellSeenTs, setBellSeenTs] = useState(0);
   const [ready, setReady] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -157,12 +164,14 @@ export function GameStoreProvider({ children }: { children: ReactNode }) {
           if (remote) adopt(remote);
           await pullDeck();
           try {
-            const [remotePhotos, seen, imgbb] = await Promise.all([
+            const [remotePhotos, remoteDics, seen, imgbb] = await Promise.all([
               loadPhotos(),
+              loadDics(),
               loadBellSeen(),
               loadImgbbApiKey(),
             ]);
             setPhotos(remotePhotos);
+            setDics(remoteDics);
             setBellSeenTs((prev) => Math.max(prev, seen));
             if (imgbb) cacheImgbbKeyLocal(imgbb);
           } catch {
@@ -188,13 +197,15 @@ export function GameStoreProvider({ children }: { children: ReactNode }) {
         if (!cancelled) adopt(remote);
         const remoteDeck = await loadDeck();
         if (!cancelled) adoptDeck(remoteDeck);
-        const [remotePhotos, seen, imgbb] = await Promise.all([
+        const [remotePhotos, remoteDics, seen, imgbb] = await Promise.all([
           loadPhotos(),
+          loadDics(),
           loadBellSeen(),
           loadImgbbApiKey(),
         ]);
         if (!cancelled) {
           setPhotos(remotePhotos);
+          setDics(remoteDics);
           setBellSeenTs((prev) => Math.max(prev, seen));
           if (imgbb) cacheImgbbKeyLocal(imgbb);
         }
@@ -496,14 +507,14 @@ export function GameStoreProvider({ children }: { children: ReactNode }) {
   );
 
   const logDictation = useCallback(
-    async (okCount: number, total: number) => {
+    async (okCount: number, total: number, kind: "paper" | "keys" = "keys") => {
       const event: GameEvent = {
         id: newId(),
         ts: Date.now(),
         kind: "dic",
         moneyDelta: 0,
-        detail: `${okCount},${total}`,
-        reason: `Диктант ${okCount}/${total}`,
+        detail: `${okCount},${total},${kind}`,
+        reason: kind === "paper" ? `Диктант на бумаге ${okCount}/${total}` : `Диктант с клавиатуры ${okCount}/${total}`,
         device: deviceId(),
       };
       await persistEvent(event, (now) => ({
@@ -512,6 +523,16 @@ export function GameStoreProvider({ children }: { children: ReactNode }) {
       }));
     },
     [persistEvent],
+  );
+
+  const applyGradePay = useCallback(
+    async (grade: number, label: string) => {
+      const g = Math.min(5, Math.max(1, Math.round(grade)));
+      const pay = gradePay(stateRef.current.settings, g);
+      if (pay > 0) await credit(pay, `${label} ${g}/5`);
+      else if (pay < 0) await payout(Math.abs(pay), `${label} ${g}/5`);
+    },
+    [credit, payout],
   );
 
   const addPhoto = useCallback(async (url: string, note?: string) => {
@@ -544,21 +565,55 @@ export function GameStoreProvider({ children }: { children: ReactNode }) {
   const gradePhoto = useCallback(
     async (id: string, grade: number) => {
       const g = Math.min(5, Math.max(1, Math.round(grade)));
-      const pay = gradePay(stateRef.current.settings, g);
       const saved = await commitPhotos((current) =>
         current.map((row) => (row.id === id ? { ...row, status: "done" as const, grade: g } : row)),
       );
       setPhotos(saved);
-      if (pay > 0) {
-        await credit(pay, `Оценка фото ${g}/5`);
-      }
+      await applyGradePay(g, "Оценка фото");
     },
-    [credit],
+    [applyGradePay],
   );
 
   const removePhoto = useCallback(async (id: string) => {
     const saved = await commitPhotos((current) => current.filter((row) => row.id !== id));
     setPhotos(saved);
+  }, []);
+
+  const addDicReport = useCallback(
+    async (answers: DicAnswer[]) => {
+      const ok = answers.filter((row) => row.ok).length;
+      const item: DicReport = {
+        id: newId(),
+        ts: Date.now(),
+        status: "wait",
+        grade: 0,
+        ok,
+        total: answers.length,
+        answers,
+      };
+      const saved = await commitDics((current) => [item, ...current].slice(0, 8));
+      setDics(saved);
+      await logDictation(ok, answers.length, "keys");
+      return saved.find((row) => row.id === item.id) ?? item;
+    },
+    [logDictation],
+  );
+
+  const gradeDic = useCallback(
+    async (id: string, grade: number) => {
+      const g = Math.min(5, Math.max(1, Math.round(grade)));
+      const saved = await commitDics((current) =>
+        current.map((row) => (row.id === id ? { ...row, status: "done" as const, grade: g } : row)),
+      );
+      setDics(saved);
+      await applyGradePay(g, "Оценка диктанта");
+    },
+    [applyGradePay],
+  );
+
+  const removeDic = useCallback(async (id: string) => {
+    const saved = await commitDics((current) => current.filter((row) => row.id !== id));
+    setDics(saved);
   }, []);
 
   const markBellSeen = useCallback(async () => {
@@ -658,6 +713,7 @@ export function GameStoreProvider({ children }: { children: ReactNode }) {
       wordStats: state.wordStats,
       deck,
       photos,
+      dics,
       bellSeenTs,
       refresh,
       ensureRound,
@@ -671,6 +727,9 @@ export function GameStoreProvider({ children }: { children: ReactNode }) {
       addPhoto,
       gradePhoto,
       removePhoto,
+      addDicReport,
+      gradeDic,
+      removeDic,
       markBellSeen,
       saveImgbbKey,
       resetProgress,
@@ -681,11 +740,14 @@ export function GameStoreProvider({ children }: { children: ReactNode }) {
       applyAnswer,
       applyHint,
       applyShop,
+      addDicReport,
       addPhoto,
       bellSeenTs,
       credit,
       deck,
+      dics,
       ensureRound,
+      gradeDic,
       gradePhoto,
       logDictation,
       markBellSeen,
@@ -693,6 +755,7 @@ export function GameStoreProvider({ children }: { children: ReactNode }) {
       photos,
       ready,
       refresh,
+      removeDic,
       removePhoto,
       resetProgress,
       saveImgbbKey,
