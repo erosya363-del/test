@@ -1192,7 +1192,7 @@ function App() {
           <h1 className="text-3xl font-black bg-gradient-to-r from-yellow-200 via-pink-200 to-purple-200 bg-clip-text text-transparent text-center px-4">
             Диктант Квест
           </h1>
-          <p className="text-sm text-white/60 text-center mt-3 px-4">Подготовка к диктанту • 1 класс</p>
+          <p className="text-sm text-white/60 text-center mt-3 px-4">Подготовка к диктанту • 2 класс</p>
         </div>
         <div className="splash-loader">
           <div className="splash-loader-bar" />
