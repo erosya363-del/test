@@ -31,6 +31,9 @@ interface WordData {
   emoji: string;
   // Варианты ошибок: каждый вариант содержит тип ошибки и неправильное слово
   errors: { wrong: string; errorType: ErrorType; letterHint?: string; stressHint?: string }[];
+  spellingTopic?: string;
+  difficulty?: 1 | 2 | 3;
+  tags?: string[];
 }
 
 const WORDS: WordData[] = [
@@ -503,6 +506,7 @@ type GameState =
   | 'fixing'
   | 'listen'
   | 'write'
+  | 'letterLearn'
   | 'dictation'
   | 'uploadPhoto'
   | 'result'
@@ -700,7 +704,8 @@ function App() {
     try {
       const round = await store.ensureRound(WORDS.length, { forceNew: true });
       applyRoundLocally(round.ids, round.pos, true, mode);
-      if (mode === 'listen') setGameState('listen');
+      if (mode === 'letter') setGameState('letterLearn');
+      else if (mode === 'listen') setGameState('listen');
       else if (level === 1) setGameState('pic');
       else if (level === 3) setGameState('write');
       else setGameState('showing');
@@ -710,7 +715,8 @@ function App() {
         .sort(() => Math.random() - 0.5)
         .slice(0, Math.min(50, WORDS.length));
       applyRoundLocally(order, 0, true, mode);
-      if (mode === 'listen') setGameState('listen');
+      if (mode === 'letter') setGameState('letterLearn');
+      else if (mode === 'listen') setGameState('listen');
       else if (level === 1) setGameState('pic');
       else if (level === 3) setGameState('write');
       else setGameState('showing');
@@ -783,9 +789,11 @@ function App() {
   const handleWriteSubmit = () => {
     if (!currentWord || !writeDraft.trim()) return;
     playClickSound();
-    const ok =
-      answersMatch(writeDraft, currentWord.correct) ||
-      answersMatch(writeDraft, currentWord.correctPlain);
+    const requireStress = playMode === "stress";
+    const ok = requireStress
+      ? answersMatch(writeDraft, currentWord.correct, { requireStress: true })
+      : answersMatch(writeDraft, currentWord.correct) ||
+        answersMatch(writeDraft, currentWord.correctPlain);
     if (ok) {
       setFeedback('correct');
       const newStreak = streak + 1;
@@ -1063,7 +1071,8 @@ function App() {
       setUserFixedWord('');
       const level = difficultyRef.current;
       const mode = playModeRef.current;
-      if (mode === 'listen') setGameState('listen');
+      if (mode === 'letter') setGameState('letterLearn');
+      else if (mode === 'listen') setGameState('listen');
       else if (level === 1) setGameState('pic');
       else if (level === 3) setGameState('write');
       else setGameState('showing');
@@ -1308,7 +1317,7 @@ function App() {
             {[
               { id: 'today', emoji: '☀️', title: 'Сегодня', desc: 'Задания папы', go: () => setGameState('today') },
               { id: 'ru', emoji: '📝', title: 'Русский', desc: 'Глаз · Диктант', go: () => setGameState('menu') },
-              { id: 'math', emoji: '🧮', title: 'Математика', desc: 'Примеры · Таблица', go: () => { setMathLaunch(null); setGameState('math'); } },
+              { id: 'math', emoji: '🧮', title: 'Математика', desc: 'Учусь · Таблица', go: () => { setMathLaunch(null); setGameState('math'); } },
               { id: 'photo', emoji: '📷', title: 'Фото папе', desc: 'Тетрадь', go: () => setGameState('uploadPhoto') },
               { id: 'shop', emoji: '🛒', title: 'Магазин', desc: 'Подсказки', go: () => { resumeAudio(); setGameState('shop'); } },
               { id: 'money', emoji: '💰', title: 'Мои деньги', desc: 'Баланс', go: () => setGameState('money') },
@@ -1516,6 +1525,39 @@ function App() {
       )}
 
       {/* ============ PIC (level 1) ============ */}
+      {gameState === 'letterLearn' && currentWord && (
+        <div className="app-screen">
+          <div className="play-stage">
+            <div className="play-badge bg-purple-500/15 border-purple-400/30 text-purple-100">📚 Учусь · Буквы</div>
+            <div className="glass-card w-full text-center space-y-3">
+              <div className="text-5xl">{currentWord.emoji}</div>
+              <p className="font-black text-3xl">{currentWord.correct}</p>
+              <p className="text-white/70 text-sm">Запомни правильные буквы</p>
+              {currentWord.errors.find((e) => e.errorType === 'letter')?.letterHint && (
+                <p className="text-blue-200 text-sm">
+                  Смотри: {currentWord.errors.find((e) => e.errorType === 'letter')?.letterHint}
+                </p>
+              )}
+            </div>
+            <button
+              type="button"
+              className="play-cta btn-primary"
+              onClick={() => {
+                playClickSound();
+                if (difficultyRef.current === 1) setGameState('pic');
+                else if (difficultyRef.current === 3) setGameState('write');
+                else setGameState('showing');
+              }}
+            >
+              Попробую сам
+            </button>
+            <button type="button" className="play-cta btn-secondary" onClick={() => setGameState(backAfterPlay())}>
+              ← Назад
+            </button>
+          </div>
+        </div>
+      )}
+
       {gameState === 'pic' && currentWord && (
         <div className="app-screen app-screen-hud">
           <div className="play-stage">

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { speakRuTwice, stopSpeaking, warmVoices } from "./speech";
-import { photoUploadReadyAsync, uploadPhotoToImgbb, friendlyNetworkError } from "./photos";
+import { photoUploadReadyAsync, uploadPhotoToImgbb, friendlyNetworkError, withTimeout } from "./photos";
 import { answersMatch } from "./data/modes";
 import type { DicAnswer } from "./data/types";
 import { playClickSound, playCorrectSound, playWrongSound, resumeAudio } from "./sounds";
@@ -90,7 +90,11 @@ export function DictationGame({ words, onPaperDone, onUploadPhoto, onSendKeys, o
         throw new Error("Нет ключа ImgBB. Папа вставит ключ в кабинете.");
       }
       const url = await uploadPhotoToImgbb(file);
-      await onUploadPhoto(url);
+      await withTimeout(
+        onUploadPhoto(url),
+        20_000,
+        "Фото ушло, но облако долго не ответило. Открой кабинет папы позже",
+      );
       setNote("Фото у папы — можно проверить в кабинете");
       setPhase("done");
     } catch (err) {
@@ -356,12 +360,17 @@ export function PhotoUploadPanel({
                 try {
                   if (!(await photoUploadReadyAsync())) throw new Error("Нет ключа ImgBB в кабинете папы");
                   const url = await uploadPhotoToImgbb(file);
-                  await onUpload(url);
+                  await withTimeout(
+                    onUpload(url),
+                    20_000,
+                    "Фото ушло, но облако долго не ответило. Открой кабинет папы позже",
+                  );
                   setOk(true);
                 } catch (err) {
                   setError(friendlyNetworkError(err, "Не загрузилось"));
                 } finally {
                   setBusy(false);
+                  event.target.value = "";
                 }
               }}
             />

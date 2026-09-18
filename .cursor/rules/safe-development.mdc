@@ -1,0 +1,27 @@
+---
+description: Safe development rules for Dictant Quest
+alwaysApply: true
+---
+
+# Dictant Quest — development safety
+
+- This is an existing production-like family project. Extend it; do not rewrite it.
+- Read `.cursor/skills/dictant-quest/SKILL.md` before UI or product changes.
+- Preserve current React + TypeScript + Vite architecture.
+- Preserve existing GameStore and cloud compatibility unless the task explicitly requests migration.
+- Existing stored user data must remain readable.
+- Keep backward compatibility for TodayTask and Settings.
+- Never silently reset money, tasks, photos, dictations, settings, or progress.
+- Avoid unrelated refactors.
+- Do not add dependencies unless they are necessary and explicitly justified.
+- Do not redesign screens while implementing logic.
+- Phone-first UI only.
+- UI language is Russian.
+- After every implementation batch run:
+  - `npm run typecheck`
+  - `npm run build`
+- Do not continue to another implementation stage without an explicit user request.
+- Before changing more than 4 files, explain why each file needs modification.
+- When changing persistence formats, add backwards-compatible decoding/defaults.
+- Money changes must be idempotent: one user action must not be credited twice.
+- Do not hard-code configurable rewards inside feature logic.

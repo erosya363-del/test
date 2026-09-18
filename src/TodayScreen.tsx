@@ -43,6 +43,16 @@ export function TodayScreen({ onBack, onStartTask }: Props) {
           <div className="glass-card w-full text-center space-y-2 mb-3">
             <p className="font-black text-lg">Пока пусто</p>
             <p className="text-white/60 text-sm">Папа ещё не задал. Можно играть в Русский или Математику.</p>
+            <button
+              type="button"
+              className="btn-secondary py-3 w-full"
+              onClick={() => {
+                playClickSound();
+                void store.refresh();
+              }}
+            >
+              Обновить
+            </button>
           </div>
         ) : (
           <div className="space-y-2 w-full mb-3">

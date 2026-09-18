@@ -28,6 +28,8 @@ const BELL_KEY = "bell";
 const IMGBB_KEY = "imgbb";
 const DICS_KEY = "dics";
 const TASKS_KEY = "tasks";
+const MATH_STATS_KEY = "mstat";
+const MATH_STATES_KEY = "mstates";
 const LOG_KEYS = ["l0", "l1", "l2", "l3", "l4", "l5", "l6", "l7"] as const;
 const EVENTS_PER_LOG = 8;
 /** Пустой слот: API не любит пустую строку, а "-" раньше ломал разбор. */
@@ -124,6 +126,10 @@ function encodeMeta(state: SharedState, updatedAt = Date.now()): string {
     `g3=${s.grade3}`,
     `g4=${s.grade4}`,
     `g5=${s.grade5}`,
+    `mrf=${s.mathRewardFirst ?? 2}`,
+    `mrr=${s.mathRewardRetry ?? 1}`,
+    `mrh=${s.mathRewardHint ?? 0}`,
+    `mrg=${s.mathRewardGaveUp ?? 0}`,
     `pp=${hexEncode(s.parentPassword || DEFAULT_SETTINGS.parentPassword)}`,
     `u=${updatedAt}`,
   ].join(";");
@@ -164,6 +170,10 @@ function decodeMeta(
       grade3: Number(map.g3 ?? DEFAULT_SETTINGS.grade3),
       grade4: Number(map.g4 ?? DEFAULT_SETTINGS.grade4),
       grade5: Number(map.g5 ?? DEFAULT_SETTINGS.grade5),
+      mathRewardFirst: Number(map.mrf ?? DEFAULT_SETTINGS.mathRewardFirst),
+      mathRewardRetry: Number(map.mrr ?? DEFAULT_SETTINGS.mathRewardRetry),
+      mathRewardHint: Number(map.mrh ?? DEFAULT_SETTINGS.mathRewardHint),
+      mathRewardGaveUp: Number(map.mrg ?? DEFAULT_SETTINGS.mathRewardGaveUp),
       parentPassword: map.pp ? hexDecode(map.pp) : DEFAULT_SETTINGS.parentPassword,
     };
   // Старые дефолты оценок (10…100) → новые (−20…+30)
@@ -365,6 +375,10 @@ export function replay(events: GameEvent[], settings = DEFAULT_SETTINGS): Shared
         grade3: Number.isFinite(Number(g3)) ? Number(g3) : currentSettings.grade3,
         grade4: Number.isFinite(Number(g4)) ? Number(g4) : currentSettings.grade4,
         grade5: Number.isFinite(Number(g5)) ? Number(g5) : currentSettings.grade5,
+        mathRewardFirst: currentSettings.mathRewardFirst ?? DEFAULT_SETTINGS.mathRewardFirst,
+        mathRewardRetry: currentSettings.mathRewardRetry ?? DEFAULT_SETTINGS.mathRewardRetry,
+        mathRewardHint: currentSettings.mathRewardHint ?? DEFAULT_SETTINGS.mathRewardHint,
+        mathRewardGaveUp: currentSettings.mathRewardGaveUp ?? DEFAULT_SETTINGS.mathRewardGaveUp,
       };
     }
     money = Math.max(0, money + event.moneyDelta);
@@ -542,7 +556,9 @@ async function releaseCloudLock(owner: string): Promise<void> {
 export async function commitEvent(event: GameEvent, local: SharedState): Promise<SharedState> {
   let lastError: unknown;
   const owner = `${event.id}`;
-  for (let attempt = 0; attempt < 10; attempt += 1) {
+  const deadline = Date.now() + 22_000;
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    if (Date.now() > deadline) break;
     try {
       const locked = await acquireCloudLock(owner);
       if (!locked) {
@@ -797,7 +813,9 @@ export async function commitPhotos(
 ): Promise<PhotoItem[]> {
   let lastError: unknown;
   const owner = `photo_${newId()}`;
-  for (let attempt = 0; attempt < 8; attempt += 1) {
+  const deadline = Date.now() + 18_000;
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    if (Date.now() > deadline) break;
     try {
       const locked = await acquireCloudLock(owner);
       if (!locked) {
@@ -817,7 +835,9 @@ export async function commitPhotos(
       await new Promise((resolve) => setTimeout(resolve, 120 + attempt * 80));
     }
   }
-  throw lastError instanceof Error ? lastError : new Error("Не удалось сохранить фото");
+  throw lastError instanceof Error
+    ? lastError
+    : new Error("Не удалось сохранить фото в общую базу. Попробуй ещё раз");
 }
 
 export async function loadBellSeen(): Promise<number> {
@@ -1102,6 +1122,39 @@ export function autoTasksForDay(day: string): TodayTask[] {
 export const __deckTest = { encodeDeck, decodeDeck };
 export const __photoTest = { encodePhotos, decodePhotos };
 export const __tasksTest = { encodeTasks, decodeTasks };
+
+/** Компактный слот математических навыков. */
+export async function loadMathCloudStats(): Promise<string> {
+  try {
+    return await cloudGet(MATH_STATS_KEY);
+  } catch {
+    return "";
+  }
+}
+
+export async function saveMathCloudStats(encoded: string): Promise<void> {
+  try {
+    await cloudSet(MATH_STATS_KEY, encoded || EMPTY_SLOT);
+  } catch {
+    /* не роняем игру из‑за статистики */
+  }
+}
+
+export async function loadMathCloudStates(): Promise<string> {
+  try {
+    return await cloudGet(MATH_STATES_KEY);
+  } catch {
+    return "";
+  }
+}
+
+export async function saveMathCloudStates(encoded: string): Promise<void> {
+  try {
+    await cloudSet(MATH_STATES_KEY, encoded || EMPTY_SLOT);
+  } catch {
+    /* ok */
+  }
+}
 
 export function cacheLocal(state: SharedState) {
   localStorage.setItem("dictation_money", String(state.money));

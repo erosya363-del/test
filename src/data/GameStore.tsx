@@ -16,6 +16,10 @@ import {
   loadDeck,
   loadDics,
   loadImgbbApiKey,
+  loadMathCloudStats,
+  loadMathCloudStates,
+  saveMathCloudStats,
+  saveMathCloudStates,
   loadPhotos,
   loadTasks,
   newId,
@@ -41,6 +45,7 @@ import {
 } from "./types";
 import { gradePay } from "./modes";
 import { cacheImgbbKeyLocal } from "../photos";
+import { pullAndMergeMathCloud } from "../math/progress";
 
 type AnswerInput = {
   ok: boolean;
@@ -211,6 +216,16 @@ export function GameStoreProvider({ children }: { children: ReactNode }) {
             } catch {
               /* offline */
             }
+          }
+          try {
+            await pullAndMergeMathCloud(
+              loadMathCloudStats,
+              loadMathCloudStates,
+              saveMathCloudStats,
+              saveMathCloudStates,
+            );
+          } catch {
+            /* math progress optional */
           }
         } finally {
           if (!silent) setSyncing(false);

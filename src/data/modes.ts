@@ -99,11 +99,26 @@ export function normalizeAnswer(text: string): string {
     .replace(/ё/g, "е");
 }
 
-export function answersMatch(input: string, expected: string): boolean {
+export type AnswersMatchOptions = {
+  /** Если true — ответ без правильного ударения не засчитывается. */
+  requireStress?: boolean;
+};
+
+export function answersMatch(
+  input: string,
+  expected: string,
+  opts?: AnswersMatchOptions,
+): boolean {
   const a = normalizeAnswer(input);
   const b = normalizeAnswer(expected);
   if (a === b) return true;
+  if (opts?.requireStress) return false;
   // Без знака ударения тоже засчитываем на уровне 3 / диктанте
   const strip = (s: string) => s.replace(/\u0301/g, "");
   return strip(a) === strip(b);
+}
+
+/** Есть ли combining acute в строке. */
+export function hasStressMark(text: string): boolean {
+  return text.includes("\u0301");
 }

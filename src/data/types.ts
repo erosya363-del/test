@@ -37,6 +37,11 @@ export type Settings = {
   grade4: number;
   grade5: number;
   parentPassword: string;
+  /** Математика: награды за исход попытки */
+  mathRewardFirst: number;
+  mathRewardRetry: number;
+  mathRewardHint: number;
+  mathRewardGaveUp: number;
 };
 
 export type GameEvent = {
@@ -149,6 +154,10 @@ export const DEFAULT_SETTINGS: Settings = {
   grade4: 20,
   grade5: 30,
   parentPassword: "654321",
+  mathRewardFirst: 2,
+  mathRewardRetry: 1,
+  mathRewardHint: 0,
+  mathRewardGaveUp: 0,
 };
 
 export const START_BALANCE = 2000;

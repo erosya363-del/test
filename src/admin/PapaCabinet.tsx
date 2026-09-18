@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { PapaStudyPanel } from "./PapaStudyPanel";
 import { useGameStore } from "../data/GameStore";
 import { todayDayKey } from "../data/cloud";
 import { DEFAULT_SETTINGS, type PhotoItem, type Settings, type TaskKind } from "../data/types";
 import { gradePay } from "../data/modes";
 import { photoUploadReady } from "../photos";
+import { MATH_CURRICULUM } from "../math/curriculum";
+import type { MathSkillId } from "../math/types";
 
 const TASK_KIND_OPTIONS: { id: TaskKind; label: string }[] = [
   { id: "math_today", label: "Математика 10" },
@@ -124,6 +127,10 @@ function settingsToDraft(settings: Settings) {
     grade3: String(settings.grade3),
     grade4: String(settings.grade4),
     grade5: String(settings.grade5),
+    mathRewardFirst: String(settings.mathRewardFirst ?? 2),
+    mathRewardRetry: String(settings.mathRewardRetry ?? 1),
+    mathRewardHint: String(settings.mathRewardHint ?? 0),
+    mathRewardGaveUp: String(settings.mathRewardGaveUp ?? 0),
   };
 }
 
@@ -148,6 +155,10 @@ function sameRewards(a: Settings, b: Settings) {
     a.grade3 === b.grade3 &&
     a.grade4 === b.grade4 &&
     a.grade5 === b.grade5 &&
+    a.mathRewardFirst === b.mathRewardFirst &&
+    a.mathRewardRetry === b.mathRewardRetry &&
+    a.mathRewardHint === b.mathRewardHint &&
+    a.mathRewardGaveUp === b.mathRewardGaveUp &&
     a.parentPassword === b.parentPassword
   );
 }
@@ -171,8 +182,10 @@ export function PapaCabinet({ onClose }: { onClose: () => void }) {
   const [authed, setAuthed] = useState(() => sessionStorage.getItem("dictation_papa") === "1");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-  const [tab, setTab] = useState<"stat" | "log" | "photo" | "tasks" | "pay" | "set">("stat");
-  const [rewardTab, setRewardTab] = useState<"eye" | "listen" | "stress" | "letter" | "shop" | "grade">("eye");
+  const [tab, setTab] = useState<"stat" | "log" | "photo" | "tasks" | "pay" | "set" | "study">("stat");
+  const [rewardTab, setRewardTab] = useState<"eye" | "listen" | "stress" | "letter" | "shop" | "grade" | "math">("eye");
+  const [mathSkillPick, setMathSkillPick] = useState<MathSkillId>("add_to_20_no_bridge");
+  const [mathTaskCount, setMathTaskCount] = useState("10");
   const [payout, setPayout] = useState("100");
   const [payReason, setPayReason] = useState("Снятие денег для сына");
   const [creditAmount, setCreditAmount] = useState("50");
@@ -309,6 +322,10 @@ export function PapaCabinet({ onClose }: { onClose: () => void }) {
     grade3: signedMoneyFromDraft(draft.grade3),
     grade4: signedMoneyFromDraft(draft.grade4),
     grade5: signedMoneyFromDraft(draft.grade5),
+    mathRewardFirst: moneyFromDraft(draft.mathRewardFirst ?? "2"),
+    mathRewardRetry: moneyFromDraft(draft.mathRewardRetry ?? "1"),
+    mathRewardHint: moneyFromDraft(draft.mathRewardHint ?? "0"),
+    mathRewardGaveUp: moneyFromDraft(draft.mathRewardGaveUp ?? "0"),
   });
 
   const openBell = () => {
@@ -433,6 +450,9 @@ export function PapaCabinet({ onClose }: { onClose: () => void }) {
           </button>
           <button type="button" className={tab === "tasks" ? "btn-primary papa-tab" : "btn-secondary papa-tab"} onClick={() => setTab("tasks")}>
             📋
+          </button>
+          <button type="button" className={tab === "study" ? "btn-primary papa-tab" : "btn-secondary papa-tab"} onClick={() => setTab("study")}>
+            📚
           </button>
           <button type="button" className={tab === "pay" ? "btn-primary papa-tab" : "btn-secondary papa-tab"} onClick={() => setTab("pay")}>
             💸
@@ -759,6 +779,43 @@ export function PapaCabinet({ onClose }: { onClose: () => void }) {
                   </button>
                 ))}
               </div>
+              {(taskKind === "math_today" || taskKind === "math_calc" || taskKind === "math_table") && (
+                <div className="space-y-2">
+                  <label className="block">
+                    <span className="field-label">Навык</span>
+                    <select
+                      className="game-input"
+                      value={mathSkillPick}
+                      onChange={(e) => {
+                        const id = e.target.value as MathSkillId;
+                        setMathSkillPick(id);
+                        const skill = MATH_CURRICULUM.find((s) => s.skillId === id);
+                        setTaskTitle(`Математика · ${skill?.shortTitle ?? id} · ${mathTaskCount}`);
+                      }}
+                    >
+                      {MATH_CURRICULUM.filter((s) => s.section !== "division").map((s) => (
+                        <option key={s.skillId} value={s.skillId}>
+                          {s.title}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="block">
+                    <span className="field-label">Количество</span>
+                    <input
+                      className="game-input"
+                      inputMode="numeric"
+                      value={mathTaskCount}
+                      onChange={(e) => {
+                        const v = e.target.value.replace(/\D/g, "");
+                        setMathTaskCount(v);
+                        const skill = MATH_CURRICULUM.find((s) => s.skillId === mathSkillPick);
+                        setTaskTitle(`Математика · ${skill?.shortTitle ?? mathSkillPick} · ${v || "10"}`);
+                      }}
+                    />
+                  </label>
+                </div>
+              )}
               <label className="block">
                 <span className="field-label">Название</span>
                 <input
@@ -801,6 +858,23 @@ export function PapaCabinet({ onClose }: { onClose: () => void }) {
               </button>
             </div>
           </div>
+        )}
+
+        {tab === "study" && (
+          <PapaStudyPanel
+            settings={settings}
+            onSaveMathRewards={(patch) => {
+              const next = { ...settings, ...patch };
+              setSettings(next);
+              void runAction(
+                { title: "Сохраняем…", tone: "wait", busy: true },
+                async () => {
+                  await store.saveSettings(next);
+                },
+                { title: "Награды математики сохранены", tone: "ok" },
+              );
+            }}
+          />
         )}
 
         {tab === "pay" && (
@@ -931,6 +1005,7 @@ export function PapaCabinet({ onClose }: { onClose: () => void }) {
                     ["letter", "🔤 Буквы"],
                     ["shop", "🛒 Магаз"],
                     ["grade", "⭐ Оценки"],
+                    ["math", "🧮 Матем"],
                   ] as const
                 ).map(([id, label]) => (
                   <button
@@ -986,6 +1061,14 @@ export function PapaCabinet({ onClose }: { onClose: () => void }) {
                   <SignedMoneyField label="3 нейтрально, ₽" value={draft.grade3} onChange={(value) => patchDraft({ grade3: value })} />
                   <SignedMoneyField label="4 хорошо, ₽" value={draft.grade4} onChange={(value) => patchDraft({ grade4: value })} />
                   <SignedMoneyField label="5 отлично, ₽" value={draft.grade5} onChange={(value) => patchDraft({ grade5: value })} />
+                </>
+              )}
+              {rewardTab === "math" && (
+                <>
+                  <MoneyField label="С первой попытки, ₽" value={draft.mathRewardFirst} onChange={(value) => patchDraft({ mathRewardFirst: value })} />
+                  <MoneyField label="Исправил сам, ₽" value={draft.mathRewardRetry} onChange={(value) => patchDraft({ mathRewardRetry: value })} />
+                  <MoneyField label="С подсказкой, ₽" value={draft.mathRewardHint} onChange={(value) => patchDraft({ mathRewardHint: value })} />
+                  <MoneyField label="Не решил, ₽" value={draft.mathRewardGaveUp} onChange={(value) => patchDraft({ mathRewardGaveUp: value })} />
                 </>
               )}
 

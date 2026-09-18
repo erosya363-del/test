@@ -2,6 +2,8 @@ import { loadImgbbApiKey } from "./data/cloud";
 import { IMGBB_API_KEY } from "./data/types";
 
 const LS_KEY = "dictation_imgbb";
+/** Жёсткий лимит всей загрузки на ImgBB (сжатие + сеть). */
+const UPLOAD_TIMEOUT_MS = 25_000;
 
 function readLocalKey(): string {
   try {
@@ -48,11 +50,28 @@ export async function photoUploadReadyAsync(): Promise<boolean> {
   return Boolean(await resolveImgbbKey());
 }
 
+export async function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(message)), ms);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 /** Safari часто пишет "Load failed" — переводим на русский. */
 export function friendlyNetworkError(err: unknown, fallback: string): string {
   const raw = err instanceof Error ? err.message : String(err || "");
   const lower = raw.toLowerCase();
   if (!raw.trim()) return fallback;
+  if (lower.includes("долг") || lower.includes("timeout") || lower.includes("timed out")) {
+    return "Слишком долго. Проверь интернет и попробуй ещё раз";
+  }
   if (
     lower.includes("load failed") ||
     lower.includes("failed to fetch") ||
@@ -116,8 +135,7 @@ function blobToBase64(blob: Blob): Promise<string> {
   });
 }
 
-/** Загрузка на ImgBB → публичный URL (виден с другого телефона). */
-export async function uploadPhotoToImgbb(file: File): Promise<string> {
+async function uploadPhotoToImgbbCore(file: File): Promise<string> {
   const key = await resolveImgbbKey();
   if (!key) {
     throw new Error("Нет ключа ImgBB. Папа: кабинет → ключ фото");
@@ -126,14 +144,22 @@ export async function uploadPhotoToImgbb(file: File): Promise<string> {
   const base64 = await blobToBase64(compressed);
   const body = new FormData();
   body.append("image", base64);
+  const controller = new AbortController();
+  const abortTimer = setTimeout(() => controller.abort(), UPLOAD_TIMEOUT_MS - 1000);
   let response: Response;
   try {
     response = await fetch(`https://api.imgbb.com/1/upload?key=${encodeURIComponent(key)}`, {
       method: "POST",
       body,
+      signal: controller.signal,
     });
   } catch (err) {
+    if (err instanceof Error && err.name === "AbortError") {
+      throw new Error("Слишком долго грузится фото");
+    }
     throw new Error(friendlyNetworkError(err, "Не удалось отправить фото"));
+  } finally {
+    clearTimeout(abortTimer);
   }
   if (!response.ok) {
     throw new Error("ImgBB не принял фото. Проверь ключ в кабинете папы");
@@ -147,4 +173,13 @@ export async function uploadPhotoToImgbb(file: File): Promise<string> {
     throw new Error("ImgBB не вернул ссылку");
   }
   return url;
+}
+
+/** Загрузка на ImgBB → публичный URL (виден с другого телефона). */
+export async function uploadPhotoToImgbb(file: File): Promise<string> {
+  return withTimeout(
+    uploadPhotoToImgbbCore(file),
+    UPLOAD_TIMEOUT_MS,
+    "Слишком долго. Проверь интернет и попробуй ещё раз",
+  );
 }
