@@ -266,18 +266,6 @@
   transform: scale(0.9);
 }
 
-@media (min-width: 640px) {
-  .letter-tile, .letter-tile-static {
-    min-width: 3.5rem;
-    height: 4.5rem;
-  }
-  .option-letter-btn {
-    width: 5rem;
-    height: 5rem;
-    font-size: 2.5rem;
-  }
-}
-
 /* ===== BUTTONS ===== */
 
 .btn-primary {

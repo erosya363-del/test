@@ -12,16 +12,19 @@ import {
   loadCloud,
   loadCloudMetaState,
   loadDeck,
+  loadImgbbApiKey,
   loadPhotos,
   newId,
   peekCloudMeta,
   readLocalCache,
   saveBellSeen,
+  saveImgbbApiKey,
   shuffleWordIds,
   type RoundDeck,
 } from "./cloud";
 import { START_HINTS, type GameEvent, type PhotoItem, type Settings, type SharedState } from "./types";
 import { gradePay } from "./modes";
+import { cacheImgbbKeyLocal } from "../photos";
 
 type AnswerInput = {
   ok: boolean;
@@ -65,6 +68,7 @@ type GameStoreValue = {
   gradePhoto: (id: string, grade: number) => Promise<void>;
   removePhoto: (id: string) => Promise<void>;
   markBellSeen: () => Promise<void>;
+  saveImgbbKey: (key: string) => Promise<void>;
   resetProgress: (reason: string) => Promise<void>;
   saveSettings: (settings: Settings) => Promise<void>;
 };
@@ -153,9 +157,14 @@ export function GameStoreProvider({ children }: { children: ReactNode }) {
           if (remote) adopt(remote);
           await pullDeck();
           try {
-            const [remotePhotos, seen] = await Promise.all([loadPhotos(), loadBellSeen()]);
+            const [remotePhotos, seen, imgbb] = await Promise.all([
+              loadPhotos(),
+              loadBellSeen(),
+              loadImgbbApiKey(),
+            ]);
             setPhotos(remotePhotos);
-            setBellSeenTs(seen);
+            setBellSeenTs((prev) => Math.max(prev, seen));
+            if (imgbb) cacheImgbbKeyLocal(imgbb);
           } catch {
             /* photos optional */
           }
@@ -179,10 +188,15 @@ export function GameStoreProvider({ children }: { children: ReactNode }) {
         if (!cancelled) adopt(remote);
         const remoteDeck = await loadDeck();
         if (!cancelled) adoptDeck(remoteDeck);
-        const [remotePhotos, seen] = await Promise.all([loadPhotos(), loadBellSeen()]);
+        const [remotePhotos, seen, imgbb] = await Promise.all([
+          loadPhotos(),
+          loadBellSeen(),
+          loadImgbbApiKey(),
+        ]);
         if (!cancelled) {
           setPhotos(remotePhotos);
-          setBellSeenTs(seen);
+          setBellSeenTs((prev) => Math.max(prev, seen));
+          if (imgbb) cacheImgbbKeyLocal(imgbb);
         }
       } catch {
         try {
@@ -549,12 +563,18 @@ export function GameStoreProvider({ children }: { children: ReactNode }) {
 
   const markBellSeen = useCallback(async () => {
     const ts = Date.now();
-    setBellSeenTs(ts);
+    setBellSeenTs((prev) => Math.max(prev, ts));
     try {
       await saveBellSeen(ts);
     } catch {
       /* offline */
     }
+  }, []);
+
+  const saveImgbbKey = useCallback(async (key: string) => {
+    const trimmed = key.trim();
+    cacheImgbbKeyLocal(trimmed);
+    await saveImgbbApiKey(trimmed);
   }, []);
 
   const resetProgress = useCallback(
@@ -652,6 +672,7 @@ export function GameStoreProvider({ children }: { children: ReactNode }) {
       gradePhoto,
       removePhoto,
       markBellSeen,
+      saveImgbbKey,
       resetProgress,
       saveSettings,
     }),
@@ -674,6 +695,7 @@ export function GameStoreProvider({ children }: { children: ReactNode }) {
       refresh,
       removePhoto,
       resetProgress,
+      saveImgbbKey,
       saveSettings,
       state,
       syncing,

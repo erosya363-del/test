@@ -20,6 +20,7 @@ const EIDS_KEY = "eids";
 const DECK_KEY = "deck";
 const PHOTOS_KEY = "photos";
 const BELL_KEY = "bell";
+const IMGBB_KEY = "imgbb";
 const LOG_KEYS = ["l0", "l1", "l2", "l3", "l4", "l5", "l6", "l7"] as const;
 const EVENTS_PER_LOG = 8;
 /** Пустой слот: API не любит пустую строку, а "-" раньше ломал разбор. */
@@ -337,11 +338,11 @@ export function replay(events: GameEvent[], settings = DEFAULT_SETTINGS): Shared
         letterRewardCorrect: Number(brc) || currentSettings.letterRewardCorrect,
         letterRewardStreak: Number(brs) || currentSettings.letterRewardStreak,
         letterPenaltyWrong: Number(bpw) || currentSettings.letterPenaltyWrong,
-        grade1: Number(g1) || currentSettings.grade1,
-        grade2: Number(g2) || currentSettings.grade2,
-        grade3: Number(g3) || currentSettings.grade3,
-        grade4: Number(g4) || currentSettings.grade4,
-        grade5: Number(g5) || currentSettings.grade5,
+        grade1: Number.isFinite(Number(g1)) ? Number(g1) : currentSettings.grade1,
+        grade2: Number.isFinite(Number(g2)) ? Number(g2) : currentSettings.grade2,
+        grade3: Number.isFinite(Number(g3)) ? Number(g3) : currentSettings.grade3,
+        grade4: Number.isFinite(Number(g4)) ? Number(g4) : currentSettings.grade4,
+        grade5: Number.isFinite(Number(g5)) ? Number(g5) : currentSettings.grade5,
       };
     }
     money = Math.max(0, money + event.moneyDelta);
@@ -724,7 +725,12 @@ export function encodePhotos(items: PhotoItem[]): string {
   for (const item of newest) {
     const row = `${item.id}_${item.ts}_${statusToCode(item.status)}_${Math.max(0, item.grade)}_${hexEncode(item.url)}`;
     const next = parts.length ? `${parts.join("|")}|${row}` : row;
-    if (next.length > 1000) break;
+    if (next.length > 1000) {
+      if (parts.length === 0) {
+        throw new Error("Фото слишком длинное для облака");
+      }
+      break;
+    }
     parts.push(row);
   }
   return parts.join("|");
@@ -804,6 +810,22 @@ export async function loadBellSeen(): Promise<number> {
 
 export async function saveBellSeen(ts: number): Promise<void> {
   await cloudSet(BELL_KEY, String(Math.max(0, Math.floor(ts))));
+}
+
+/** Ключ ImgBB в облаке — один на семью (папа сохранил → сын грузит). */
+export async function loadImgbbApiKey(): Promise<string> {
+  try {
+    const raw = await cloudGet(IMGBB_KEY);
+    if (isEmptySlot(raw)) return "";
+    return hexDecode(raw) || "";
+  } catch {
+    return "";
+  }
+}
+
+export async function saveImgbbApiKey(key: string): Promise<void> {
+  const trimmed = key.trim();
+  await cloudSet(IMGBB_KEY, trimmed ? hexEncode(trimmed) : EMPTY_SLOT);
 }
 
 /** Экспорт для юнит-доказательств без сети. */

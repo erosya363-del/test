@@ -1093,7 +1093,9 @@ function App() {
   const displayedWord = currentWord
     ? gameState === 'showing' || (gameState === 'result' && playMode === 'listen')
       ? currentWord.correct
-      : (currentWord.errors[currentErrorVariant]?.wrong ?? currentWord.correct)
+      : gameState === 'result' && difficulty === 3
+        ? (writeDraft.trim() || currentWord.correct)
+        : (currentWord.errors[currentErrorVariant]?.wrong ?? currentWord.correct)
     : '';
   const currentError = currentWord ? currentWord.errors[currentErrorVariant] : null;
   const progress = wordsOrder.length > 0 ? ((currentWordIndex) / wordsOrder.length) * 100 : 0;
@@ -1126,12 +1128,12 @@ function App() {
   if (gameState === 'splash') {
     return (
       <div className="splash-screen">
-        <div className="splash-logo text-7xl md:text-9xl mb-4">📝</div>
+        <div className="splash-logo text-7xl mb-4">📝</div>
         <div className="splash-title">
-          <h1 className="text-3xl md:text-5xl font-black bg-gradient-to-r from-yellow-200 via-pink-200 to-purple-200 bg-clip-text text-transparent text-center px-4">
+          <h1 className="text-3xl font-black bg-gradient-to-r from-yellow-200 via-pink-200 to-purple-200 bg-clip-text text-transparent text-center px-4">
             Диктант Квест
           </h1>
-          <p className="text-sm md:text-base text-white/60 text-center mt-3 px-4">Подготовка к диктанту • 1 класс</p>
+          <p className="text-sm text-white/60 text-center mt-3 px-4">Подготовка к диктанту • 1 класс</p>
         </div>
         <div className="splash-loader">
           <div className="splash-loader-bar" />
@@ -1166,7 +1168,7 @@ function App() {
 
       {showMoneyAnim && (
         <div key={showMoneyAnim.key} className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[100] pointer-events-none">
-          <div className="text-4xl md:text-5xl font-black text-yellow-300 animate-money-pop drop-shadow-[0_0_20px_rgba(255,215,0,0.8)]">
+          <div className="text-4xl font-black text-yellow-300 animate-money-pop drop-shadow-[0_0_20px_rgba(255,215,0,0.8)]">
             +{showMoneyAnim.amount} ₽ 💰
           </div>
         </div>
@@ -1623,7 +1625,13 @@ function App() {
                 <div className="glass-card-result border-green-400/30 bg-green-500/10 w-full">
                   <p className="text-sm text-green-200/70 mb-1 uppercase tracking-wider font-bold">Правильно</p>
                   <p className="play-word mb-2">{currentWord.correct}</p>
-                  {currentError?.errorType !== 'none' && (
+                  {difficulty === 3
+                    ? (writeDraft.trim() && (
+                        <div className="bg-red-500/10 rounded-xl p-3 border border-red-400/20">
+                          <p className="text-base text-red-200/80">Ты написал: <span className="text-red-300 line-through">{writeDraft.trim()}</span></p>
+                        </div>
+                      ))
+                    : currentError?.errorType !== 'none' && (
                     <div className="bg-red-500/10 rounded-xl p-3 border border-red-400/20">
                       <p className="text-base text-red-200/80">Было: <span className="text-red-300 line-through">{displayedWord}</span></p>
                     </div>
@@ -1641,7 +1649,13 @@ function App() {
                 <div className="glass-card-result border-red-400/30 bg-red-500/10 w-full">
                   <p className="text-sm text-red-200/70 mb-1 uppercase tracking-wider font-bold">Запомни</p>
                   <p className="play-word mb-2">{currentWord.correct}</p>
-                  {currentError?.errorType !== 'none' && (
+                  {difficulty === 3
+                    ? (
+                        <div className="bg-red-500/10 rounded-xl p-3 border border-red-400/20">
+                          <p className="text-base text-red-200/80">Ты написал: <span className="text-red-300">{writeDraft.trim() || "—"}</span></p>
+                        </div>
+                      )
+                    : currentError?.errorType !== 'none' && (
                     <div className="bg-red-500/10 rounded-xl p-3 border border-red-400/20">
                       <p className="text-base text-red-200/80">Было: <span className="text-red-300">{displayedWord}</span></p>
                     </div>
@@ -1662,7 +1676,7 @@ function App() {
         <div className="app-screen">
           <div className="text-center mb-4 animate-fade-in-up">
             <div className="text-7xl mb-3 animate-bounce-big">🏆</div>
-            <h1 className="text-3xl md:text-4xl font-black bg-gradient-to-r from-yellow-200 to-orange-200 bg-clip-text text-transparent">
+            <h1 className="text-3xl font-black bg-gradient-to-r from-yellow-200 to-orange-200 bg-clip-text text-transparent">
               Готово!
             </h1>
           </div>
@@ -1689,7 +1703,7 @@ function App() {
             </div>
 
             <div className="flex gap-2">
-              <button onClick={() => void startGame(playMode)} className="flex-1 btn-primary py-2.5 text-sm">🔄 Ещё</button>
+              <button onClick={() => void startGame(playMode, difficulty)} className="flex-1 btn-primary py-2.5 text-sm">🔄 Ещё</button>
               <button onClick={() => { playClickSound(); setGameState('menu'); }} className="flex-1 btn-secondary py-2.5 text-sm">🏠 Меню</button>
             </div>
           </div>

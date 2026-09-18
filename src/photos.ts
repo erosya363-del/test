@@ -1,13 +1,26 @@
 import { IMGBB_API_KEY } from "./data/types";
 
+const LS_KEY = "dictation_imgbb";
+
 function resolveImgbbKey(): string {
   try {
-    const fromLs = localStorage.getItem("dictation_imgbb")?.trim();
+    const fromLs = localStorage.getItem(LS_KEY)?.trim();
     if (fromLs) return fromLs;
   } catch {
     /* private mode */
   }
   return (IMGBB_API_KEY || "").trim();
+}
+
+/** Пишет ключ в localStorage (после загрузки из облака или сохранения папой). */
+export function cacheImgbbKeyLocal(key: string): void {
+  try {
+    const trimmed = key.trim();
+    if (trimmed) localStorage.setItem(LS_KEY, trimmed);
+    else localStorage.removeItem(LS_KEY);
+  } catch {
+    /* private mode */
+  }
 }
 
 export function photoUploadReady(): boolean {
