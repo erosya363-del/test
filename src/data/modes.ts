@@ -67,6 +67,13 @@ export function modeRewards(settings: Settings, mode: PlayMode): ModeRewards {
   }
 }
 
+/** Чуть больше за более сложный уровень (картинка → слово → пиши). */
+export function difficultyBonus(level: Difficulty): number {
+  if (level === 3) return 2;
+  if (level === 2) return 1;
+  return 0;
+}
+
 export function modeTitle(mode: PlayMode): string {
   return PLAY_MODES.find((item) => item.id === mode)?.title ?? "Игра";
 }

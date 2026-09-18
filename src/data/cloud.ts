@@ -140,11 +140,7 @@ function decodeMeta(
 ): (Pick<SharedState, "money" | "hints" | "settings"> & { updatedAt: number }) | null {
   const map = parseMetaMap(raw);
   if (!map) return null;
-  return {
-    money: Number(map.m ?? 0),
-    hints: Number(map.h ?? START_HINTS),
-    updatedAt: Number(map.u ?? 0),
-    settings: {
+  const settings = {
       rewardCorrect: Number(map.rc ?? DEFAULT_SETTINGS.rewardCorrect),
       rewardStreak: Number(map.rs ?? DEFAULT_SETTINGS.rewardStreak),
       penaltyWrong: Number(map.pw ?? DEFAULT_SETTINGS.penaltyWrong),
@@ -165,7 +161,26 @@ function decodeMeta(
       grade4: Number(map.g4 ?? DEFAULT_SETTINGS.grade4),
       grade5: Number(map.g5 ?? DEFAULT_SETTINGS.grade5),
       parentPassword: map.pp ? hexDecode(map.pp) : DEFAULT_SETTINGS.parentPassword,
-    },
+    };
+  // Старые дефолты оценок (10…100) → новые (−20…+30)
+  if (
+    settings.grade1 === 10 &&
+    settings.grade2 === 25 &&
+    settings.grade3 === 40 &&
+    settings.grade4 === 60 &&
+    settings.grade5 === 100
+  ) {
+    settings.grade1 = DEFAULT_SETTINGS.grade1;
+    settings.grade2 = DEFAULT_SETTINGS.grade2;
+    settings.grade3 = DEFAULT_SETTINGS.grade3;
+    settings.grade4 = DEFAULT_SETTINGS.grade4;
+    settings.grade5 = DEFAULT_SETTINGS.grade5;
+  }
+  return {
+    money: Number(map.m ?? 0),
+    hints: Number(map.h ?? START_HINTS),
+    updatedAt: Number(map.u ?? 0),
+    settings,
   };
 }
 

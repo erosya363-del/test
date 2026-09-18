@@ -7,6 +7,7 @@ import { EXTRA_WORDS } from './data/vocabExtra';
 import {
   answersMatch,
   DIFFICULTY_LEVELS,
+  difficultyBonus,
   modeRewards,
   modeTitle,
   PLAY_MODES,
@@ -560,6 +561,9 @@ function App() {
   }, [gameState, ready]);
 
   const rewards = modeRewards(settings, playMode);
+  const levelBonus = playMode === 'listen' || playMode === 'dictation' ? 0 : difficultyBonus(difficulty);
+  const payCorrect = rewards.correct + levelBonus;
+  const payStreak = rewards.streak + levelBonus;
 
   const pickErrorVariant = useCallback((wordIdx: number) => {
     const word = WORDS[wordIdx];
@@ -720,8 +724,8 @@ function App() {
   };
 
   const answerExtras = () => ({
-    rewardCorrect: rewards.correct,
-    rewardStreak: rewards.streak,
+    rewardCorrect: payCorrect,
+    rewardStreak: payStreak,
     penaltyWrong: rewards.penalty,
   });
 
@@ -734,7 +738,7 @@ function App() {
     if (ok) {
       setFeedback('correct');
       const newStreak = streak + 1;
-      const reward = newStreak >= 2 ? rewards.streak : rewards.correct;
+      const reward = newStreak >= 2 ? payStreak : payCorrect;
       void store.applyAnswer({
         ok: true,
         word: currentWord.correctPlain,
@@ -822,7 +826,7 @@ function App() {
       // Верно!
       setFeedback('correct');
       const newStreak = streak + 1;
-      const reward = newStreak >= 2 ? rewards.streak : rewards.correct;
+      const reward = newStreak >= 2 ? payStreak : payCorrect;
       void store.applyAnswer({ok: true,
         word: word.correctPlain,
         shown: errorData.wrong,
@@ -924,7 +928,7 @@ function App() {
       // Правильно!
       setFeedback('correct');
       const newStreak = streak + 1;
-      const reward = newStreak >= 2 ? rewards.streak : rewards.correct;
+      const reward = newStreak >= 2 ? payStreak : payCorrect;
       void store.applyAnswer({
         ok: true,
         word: word.correctPlain,
@@ -1038,7 +1042,7 @@ function App() {
     if (ok) {
       setFeedback('correct');
       const newStreak = streak + 1;
-      const reward = newStreak >= 2 ? rewards.streak : rewards.correct;
+      const reward = newStreak >= 2 ? payStreak : payCorrect;
       void store.applyAnswer({
         ok: true,
         word: currentWord.correctPlain,
@@ -1178,8 +1182,13 @@ function App() {
         </div>
       )}
 
-      {/* Top HUD */}
-      {gameState !== 'menu' && gameState !== 'shop' && gameState !== 'final' && (
+      {/* Top HUD — только во время раунда слов, не на меню/диктанте/выборе */}
+      {gameState !== 'menu' &&
+        gameState !== 'shop' &&
+        gameState !== 'final' &&
+        gameState !== 'levelPick' &&
+        gameState !== 'dictation' &&
+        gameState !== 'uploadPhoto' && (
         <div className="app-hud">
           <div className="h-1 bg-white/10">
             <div className="h-full bg-gradient-to-r from-green-400 via-emerald-400 to-cyan-400 transition-all duration-500 shadow-[0_0_8px_rgba(52,211,153,0.5)]" style={{ width: `${progress}%` }} />
@@ -1264,7 +1273,9 @@ function App() {
                         <p className="font-black text-base">{mode.title}</p>
                         <p className="text-white/55 text-sm">{mode.desc}</p>
                         <p className="text-yellow-300/80 text-xs mt-1 tabular-nums">
-                          +{r.correct} / +{r.streak} / −{r.penalty} ₽
+                          {mode.id === 'dictation'
+                            ? 'оценка папы · 1–5'
+                            : `+${r.correct} / +${r.streak} / −${r.penalty} ₽`}
                         </p>
                       </div>
                       <span className="text-white/40 text-lg">→</span>
@@ -1322,6 +1333,9 @@ function App() {
                         {level.id}. {level.title}
                       </p>
                       <p className="text-white/55 text-sm">{level.desc}</p>
+                      {level.id > 1 && (
+                        <p className="text-yellow-300/80 text-xs mt-1">+{difficultyBonus(level.id)} ₽ к премии</p>
+                      )}
                     </div>
                   </div>
                 </button>
@@ -1645,7 +1659,7 @@ function App() {
                   )}
                 </div>
                 <div className="play-money text-yellow-300">
-                  +{streak >= 2 ? rewards.streak : rewards.correct} ₽ 💰
+                  +{streak >= 2 ? payStreak : payCorrect} ₽ 💰
                   {streak >= 2 && <span className="text-orange-400 ml-2">🔥</span>}
                 </div>
               </div>
